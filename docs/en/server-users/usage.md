@@ -1,6 +1,6 @@
 # Usage (Server Users)
 
-How to rent a room using Otachidai Bot.
+How to rent a room using otachidai Bot.
 
 ## How to Start a Rental Request
 
@@ -30,7 +30,7 @@ You can begin a rental request in three ways:
 
 ## Ending Your Session
 
-When you are done with the room, notify Otachidai Bot.  
+When you are done with the room, notify otachidai Bot.
 The bot releases the room so the next user can request it.
 
 ## Room Handoff When Leaving a VC

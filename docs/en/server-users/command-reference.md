@@ -15,14 +15,14 @@ Starts a rental request.
 
 **Description**
 
-After running this command, the bot will ask you to describe your purpose.  
+After running this command, the bot will ask you to describe your purpose.
 Complete the input within 10 minutes to be assigned an available room.
 
 ---
 
 ## `/help`
 
-Displays usage instructions for Otachidai Bot.
+Displays usage instructions for otachidai Bot.
 
 | Item | Details |
 |---|---|
@@ -31,5 +31,5 @@ Displays usage instructions for Otachidai Bot.
 
 **Description**
 
-Shows the usage guide for server members.  
+Shows the usage guide for server members.
 Users with administrator permissions also see admin command information.

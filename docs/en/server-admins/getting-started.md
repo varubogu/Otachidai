@@ -1,10 +1,10 @@
 # Getting Started (Server Admins)
 
-Initial setup steps to enable Otachidai Bot in your Discord server.
+Initial setup steps to enable otachidai Bot in your Discord server.
 
 ## Prerequisites
 
-- Otachidai Bot has been invited to your server
+- otachidai Bot has been invited to your server
 - You are logged in with a server administrator account
 
 ## Setup Order

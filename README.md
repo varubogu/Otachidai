@@ -1,4 +1,4 @@
-# Otachidai Bot
+# otachidai Bot
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![日本語](https://img.shields.io/badge/README-日本語-blue)](README.ja.md)

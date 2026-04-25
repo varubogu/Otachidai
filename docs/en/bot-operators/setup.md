@@ -1,6 +1,6 @@
 # Setup (Bot Operators)
 
-Instructions for hosting Otachidai Bot and making it available in a Discord server.
+Instructions for hosting otachidai Bot and making it available in a Discord server.
 
 ## Prerequisites
 
@@ -21,8 +21,8 @@ Instructions for hosting Otachidai Bot and making it available in a Discord serv
 ## 2. Clone the Repository
 
 ```bash
-git clone https://github.com/<your-org>/Otachidai.git
-cd Otachidai
+git clone https://github.com/<your-org>/otachidai.git
+cd otachidai
 ```
 
 ## 3. Configure Environment Variables
@@ -71,7 +71,7 @@ Open the generated URL in a browser to invite the bot to your server.
 
 ## 6. Initial Configuration
 
-After inviting the bot, a server admin needs to complete the initial setup.  
+After inviting the bot, a server admin needs to complete the initial setup.
 See [Server Admins: Getting Started](../server-admins/getting-started.md).
 
 ## Troubleshooting
