@@ -97,7 +97,7 @@ jobs:
             -f db/sql/init.sql
 
       - name: Run database migrations
-        run: cargo run -j 1 --bin=otachidai_discord_bot_rs -- migrate-only
+        run: cargo run -j 1 --manifest-path migration/Cargo.toml -- up
 
       - name: Run ignored facade tests (spreadsheet)
         run: cargo test -j 1 --test mod integration::facades::spreadsheet_test -- --ignored

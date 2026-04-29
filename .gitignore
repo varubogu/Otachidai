@@ -21,8 +21,12 @@ target
 #.idea/
 
 .env
+.env.*
 !.env.example
+!.env.example.*
 
 # Added by cargo
 
 /target
+
+.claude/settings.local.json

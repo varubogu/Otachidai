@@ -1,0 +1,40 @@
+# ================================
+# ビルドステージ
+# ================================
+FROM rust:1-bookworm AS builder
+
+WORKDIR /build
+
+COPY migration/Cargo.toml migration/Cargo.lock* ./migration/
+
+# 依存関係キャッシング
+RUN mkdir -p migration/src && \
+    echo "fn main() {}" > migration/src/main.rs && \
+    echo "pub struct Migrator;" > migration/src/lib.rs && \
+    cargo build --release --manifest-path migration/Cargo.toml || true
+
+RUN rm -rf migration/src migration/target/release/migration*
+
+# 実際のソースをコピーしてビルド
+COPY migration/src ./migration/src
+RUN cargo build --release --manifest-path migration/Cargo.toml
+
+# ================================
+# ランタイムステージ
+# ================================
+FROM debian:bookworm-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m -u 1001 migrationuser
+
+WORKDIR /app
+
+COPY --from=builder /build/migration/target/release/migration .
+
+RUN chown migrationuser:migrationuser /app/migration
+USER migrationuser
+
+ENTRYPOINT ["/app/migration"]

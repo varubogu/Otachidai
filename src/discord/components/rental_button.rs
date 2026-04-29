@@ -1,0 +1,18 @@
+use twilight_model::channel::message::component::{ActionRow, Button, ButtonStyle, Component};
+
+pub fn build_rental_button(label: impl Into<String>) -> Vec<Component> {
+    let button = Component::Button(Button {
+        id: None,
+        custom_id: Some("rental_start".to_string()),
+        disabled: false,
+        emoji: None,
+        label: Some(label.into()),
+        style: ButtonStyle::Primary,
+        url: None,
+        sku_id: None,
+    });
+    vec![Component::ActionRow(ActionRow {
+        id: None,
+        components: vec![button],
+    })]
+}

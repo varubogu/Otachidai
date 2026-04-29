@@ -60,6 +60,25 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  migration:
+    image: ghcr.io/${GITHUB_REPOSITORY:-varubogu/otachidai}-migration:latest
+    # # 検証用：ビルドする
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile.migration
+    env_file:
+      - .env.app
+    environment:
+      DB_HOST: db
+      TZ: UTC
+    networks:
+      - app_network
+    depends_on:
+      db:
+        condition: service_healthy
+    profiles:
+      - migration  # docker compose --profile migration run --rm migration up
+
   maintenance:
     # メンテナンスイメージもGHCRからpull
     image: ghcr.io/${GITHUB_REPOSITORY:-varubogu/otachidai}-maintenance:latest
