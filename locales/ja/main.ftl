@@ -26,12 +26,10 @@ admin-room-at-least-one = text_channel_id または voice_channel_id のいず�
 
 ## ヘルプ
 help-title = otachidai Bot — ヘルプ
-help-user =
-    **ユーザーコマンド**
+help-user = **ユーザーコマンド**
     `/rent` — レンタルリクエストを開始する
     `/help` — このヘルプを表示する
-help-admin =
-    **管理者コマンド**
+help-admin = **管理者コマンド**
     `/register_report_channel` — タイムアウト通知チャンネルを登録する
     `/register_rental_button_channel` — レンタルボタンを投稿するチャンネルを登録する
     `/register_room` — 部屋を登録する（テキストチャンネル、ボイスチャンネル、またはその両方）

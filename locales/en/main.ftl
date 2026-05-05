@@ -26,12 +26,10 @@ admin-room-at-least-one = At least one of text_channel_id or voice_channel_id is
 
 ## Help
 help-title = otachidai Bot — Help
-help-user =
-    **User Commands**
+help-user = **User Commands**
     `/rent` — Start a rental request
     `/help` — Show this help
-help-admin =
-    **Admin Commands**
+help-admin = **Admin Commands**
     `/register_report_channel` — Register the channel for timeout notifications
     `/register_rental_button_channel` — Register the channel where the rental button is posted
     `/register_room` — Register a room (text channel, voice channel, or both)
