@@ -20,6 +20,16 @@ use twilight_model::{
     http::interaction::{InteractionResponse, InteractionResponseData, InteractionResponseType},
 };
 
+pub enum StartRentalResult {
+    Started {
+        session_id: i32,
+        room_id: i32,
+        response: InteractionResponse,
+    },
+    AlreadyRenting,
+    NoAvailableRooms,
+}
+
 pub fn build_purpose_modal(
     state: &AppState,
     lang: &str,
@@ -60,7 +70,7 @@ pub async fn start_rental(
     user_id: Id<UserMarker>,
     voice_channel_id: Option<Id<ChannelMarker>>,
     lang: &str,
-) -> BotResult<Option<(i32, i32, InteractionResponse)>> {
+) -> BotResult<StartRentalResult> {
     let existing = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
             rental_facade::find_active_session_for_user(txn, guild_id.get(), user_id.get()).await
@@ -68,8 +78,26 @@ pub async fn start_rental(
     })
     .await?;
 
-    if existing.is_some() {
-        return Ok(None);
+    if let Some(existing) = existing {
+        let has_pending_state = state.rental_states.iter().any(|entry| {
+            matches!(
+                &entry.state,
+                RentalState::AwaitingPurpose {
+                    session_id,
+                    host_user_id,
+                    ..
+                } if *session_id == existing.id && *host_user_id == user_id.get()
+            )
+        });
+        if existing.state == rental_sessions::STATE_AWAITING_PURPOSE && has_pending_state {
+            return Ok(StartRentalResult::Started {
+                session_id: existing.id,
+                room_id: existing.room_id,
+                response: build_purpose_modal(&state, lang, existing.id, existing.room_id),
+            });
+        }
+
+        return Ok(StartRentalResult::AlreadyRenting);
     }
 
     // Prefer the VC's registered room if one exists
@@ -80,8 +108,19 @@ pub async fn start_rental(
             })
         })
         .await?;
-        if vc_room.is_some() {
-            vc_room
+        if let Some(room) = vc_room {
+            let active_session = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+                let room_id = room.id;
+                Box::pin(
+                    async move { rental_facade::find_active_session_for_room(txn, room_id).await },
+                )
+            })
+            .await?;
+            if active_session.is_none() {
+                Some(room)
+            } else {
+                None
+            }
         } else {
             with_guild_context(&state.db.guild, guild_id.get(), |txn| {
                 Box::pin(async move { room_facade::find_available_room(txn, guild_id.get()).await })
@@ -96,7 +135,7 @@ pub async fn start_rental(
     };
 
     let Some(room) = room else {
-        return Ok(None);
+        return Ok(StartRentalResult::NoAvailableRooms);
     };
 
     let room_id = room.id;
@@ -131,6 +170,7 @@ pub async fn start_rental(
         RentalStateEntry {
             state: RentalState::AwaitingPurpose {
                 session_id: session.id,
+                host_user_id: user_id.get(),
                 timeout_task: timeout,
             },
             room_id,
@@ -138,7 +178,11 @@ pub async fn start_rental(
     );
 
     let response = build_purpose_modal(&state, lang, session.id, room_id);
-    Ok(Some((session.id, room_id, response)))
+    Ok(StartRentalResult::Started {
+        session_id: session.id,
+        room_id,
+        response,
+    })
 }
 
 pub async fn submit_purpose(

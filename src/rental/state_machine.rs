@@ -10,6 +10,7 @@ use twilight_model::id::{
 pub enum RentalState {
     AwaitingPurpose {
         session_id: i32,
+        host_user_id: u64,
         timeout_task: JoinHandle<()>,
     },
     Active {

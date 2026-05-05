@@ -1,6 +1,9 @@
 use crate::entities::rooms;
 use crate::error::{BotError, BotResult};
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set};
+use crate::facade::rental as rental_facade;
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, Set,
+};
 
 pub async fn register_room<C: ConnectionTrait>(
     db: &C,
@@ -48,12 +51,20 @@ pub async fn find_available_room<C: ConnectionTrait>(
     db: &C,
     guild_id: u64,
 ) -> BotResult<Option<rooms::Model>> {
-    rooms::Entity::find()
+    let rooms = rooms::Entity::find()
         .filter(rooms::Column::GuildId.eq(guild_id as i64))
-        .filter(rooms::Column::IsAvailable.eq(true))
-        .one(db)
-        .await
-        .map_err(BotError::from)
+        .order_by_asc(rooms::Column::Id)
+        .all(db)
+        .await?;
+
+    for room in rooms {
+        let active_session = rental_facade::find_active_session_for_room(db, room.id).await?;
+        if active_session.is_none() {
+            return Ok(Some(room));
+        }
+    }
+
+    Ok(None)
 }
 
 pub async fn find_room_by_voice_channel<C: ConnectionTrait>(

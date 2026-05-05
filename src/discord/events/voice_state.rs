@@ -12,6 +12,12 @@ use twilight_model::channel::message::AllowedMentions;
 use twilight_model::gateway::payload::incoming::VoiceStateUpdate;
 use twilight_model::id::Id;
 
+enum LeaveAction {
+    CancelPending,
+    StartHandoff { session_id: i32, room_id: i32 },
+    Ignore,
+}
+
 pub async fn handle(state: Arc<AppState>, event: Box<VoiceStateUpdate>) -> BotResult<()> {
     let Some(guild_id) = event.guild_id else {
         return Ok(());
@@ -25,6 +31,20 @@ pub async fn handle(state: Arc<AppState>, event: Box<VoiceStateUpdate>) -> BotRe
 
     match event.channel_id {
         Some(channel_id) => {
+            let previous_vc = find_user_current_vc(&state, user_id.get());
+            if let Some(vc_id) = previous_vc
+                && vc_id != channel_id.get()
+            {
+                handle_leave(
+                    state.clone(),
+                    guild_id,
+                    user_id,
+                    Id::new(vc_id),
+                    user_locale.as_deref(),
+                )
+                .await?;
+            }
+
             handle_join(state, guild_id, user_id, channel_id, user_locale.as_deref()).await
         }
         None => {
@@ -73,12 +93,17 @@ async fn handle_join(
         rental_flow::start_rental(state.clone(), guild_id, user_id, Some(channel_id), &lang)
             .await?;
 
-    if let Some((_session_id, _room_id, _modal_response)) = result {
+    if let rental_flow::StartRentalResult::Started {
+        session_id,
+        room_id,
+        ..
+    } = result
+    {
         let prompt = state
             .i18n
             .get(&lang, &crate::i18n::MessageKey::BotRentalRequestStart);
 
-        use crate::discord::components::rental_button::build_rental_button;
+        use crate::discord::components::rental_button::build_rental_button_with_custom_id;
         let btn_label = state
             .i18n
             .get(&lang, &crate::i18n::MessageKey::RentButtonLabel);
@@ -95,10 +120,14 @@ async fn handle_join(
             .create_message(notification_channel_id)
             .content(&content)
             .allowed_mentions(Some(&allowed_mentions))
-            .components(&build_rental_button(btn_label))
+            .components(&build_rental_button_with_custom_id(
+                btn_label,
+                format!("rental_start:{session_id}:{room_id}"),
+            ))
             .await
         {
             tracing::warn!(%guild_id, %user_id, %channel_id, %notification_channel_id, error = %err, "Failed to post rental prompt");
+            rental_flow::release_rental(state, guild_id, user_id, channel_id.get()).await?;
         }
     }
 
@@ -113,19 +142,40 @@ async fn handle_leave(
     discord_locale: Option<&str>,
 ) -> BotResult<()> {
     let key = state_key(guild_id, channel_id);
-    let (session_id, room_id, is_host_leaving) = {
+    let action = {
         let entry = state.rental_states.get(&key);
         let Some(ref entry) = entry else {
             return Ok(());
         };
-        let is_host = matches!(&entry.state, RentalState::Active { host_user_id, .. } if *host_user_id == user_id.get());
-        (entry.session_id(), entry.room_id, is_host)
+        match &entry.state {
+            RentalState::AwaitingPurpose { host_user_id, .. } if *host_user_id == user_id.get() => {
+                LeaveAction::CancelPending
+            }
+            RentalState::Active {
+                session_id,
+                host_user_id,
+            } if *host_user_id == user_id.get() => LeaveAction::StartHandoff {
+                session_id: *session_id,
+                room_id: entry.room_id,
+            },
+            _ => LeaveAction::Ignore,
+        }
     }; // dashmap Ref dropped here
 
-    if is_host_leaving {
-        let lang = resolve_language(&state, guild_id, discord_locale).await;
+    match action {
+        LeaveAction::CancelPending => {
+            rental_flow::release_rental(state, guild_id, user_id, channel_id.get()).await?;
+        }
+        LeaveAction::StartHandoff {
+            session_id,
+            room_id,
+        } => {
+            let lang = resolve_language(&state, guild_id, discord_locale).await;
 
-        handoff::initiate_handoff(state, guild_id, channel_id, session_id, room_id, &lang).await?;
+            handoff::initiate_handoff(state, guild_id, channel_id, session_id, room_id, &lang)
+                .await?;
+        }
+        LeaveAction::Ignore => {}
     }
 
     Ok(())
@@ -133,10 +183,14 @@ async fn handle_leave(
 
 fn find_user_current_vc(state: &AppState, user_id: u64) -> Option<u64> {
     for entry in state.rental_states.iter() {
-        if let RentalState::Active { host_user_id, .. } = &entry.state
-            && *host_user_id == user_id
-        {
-            return Some(entry.key().1);
+        match &entry.state {
+            RentalState::AwaitingPurpose { host_user_id, .. }
+            | RentalState::Active { host_user_id, .. }
+                if *host_user_id == user_id =>
+            {
+                return Some(entry.key().1);
+            }
+            _ => {}
         }
     }
     None

@@ -2,7 +2,7 @@ use crate::app_state::AppState;
 use crate::error::BotResult;
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
-use crate::rental::{flow as rental_flow, handoff};
+use crate::rental::{flow as rental_flow, handoff, state_machine::RentalState};
 use std::sync::Arc;
 use twilight_model::{
     application::interaction::{
@@ -175,6 +175,37 @@ async fn handle_component(
         return Ok(());
     }
 
+    // rental_start:{session_id}:{room_id}
+    if let Some(rest) = data.custom_id.strip_prefix("rental_start:") {
+        let parts: Vec<&str> = rest.splitn(2, ':').collect();
+        if parts.len() == 2
+            && let (Ok(session_id), Ok(room_id)) =
+                (parts[0].parse::<i32>(), parts[1].parse::<i32>())
+        {
+            let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
+            let response = if is_pending_rental_host(&state, session_id, user_id.get()) {
+                rental_flow::build_purpose_modal(&state, &lang, session_id, room_id)
+            } else {
+                let msg = state.i18n.get(&lang, &MessageKey::ErrorGeneric);
+                InteractionResponse {
+                    kind: InteractionResponseType::ChannelMessageWithSource,
+                    data: Some(InteractionResponseData {
+                        content: Some(msg),
+                        flags: Some(MessageFlags::EPHEMERAL),
+                        ..Default::default()
+                    }),
+                }
+            };
+
+            state
+                .http
+                .interaction(state.application_id)
+                .create_response(interaction.id, &interaction.token, &response)
+                .await?;
+        }
+        return Ok(());
+    }
+
     // handoff_accept:{session_id}:{room_id}
     if let Some(rest) = data.custom_id.strip_prefix("handoff_accept:") {
         let parts: Vec<&str> = rest.splitn(2, ':').collect();
@@ -289,6 +320,19 @@ fn find_vc_for_session(state: &AppState, session_id: i32) -> u64 {
         }
     }
     0
+}
+
+fn is_pending_rental_host(state: &AppState, session_id: i32, user_id: u64) -> bool {
+    state.rental_states.iter().any(|entry| {
+        matches!(
+            &entry.state,
+            RentalState::AwaitingPurpose {
+                session_id: pending_session_id,
+                host_user_id,
+                ..
+            } if *pending_session_id == session_id && *host_user_id == user_id
+        )
+    })
 }
 
 fn extract_modal_text(data: &ModalInteractionData, custom_id: &str) -> String {
