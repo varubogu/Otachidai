@@ -13,27 +13,22 @@ pub async fn handle(
     state: Arc<AppState>,
     guild_id: Id<GuildMarker>,
     data: &CommandData,
+    lang: &str,
 ) -> BotResult<String> {
     let text_channel_id = extract_optional_channel(data, "text_channel");
     let voice_channel_id = extract_optional_channel(data, "voice_channel");
 
     if text_channel_id.is_none() && voice_channel_id.is_none() {
-        let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-            Box::pin(async move { guild_settings::get_language(txn, guild_id.get()).await })
-        })
-        .await
-        .unwrap_or_else(|_| "en".to_string());
-        return Ok(state.i18n.get(&lang, &MessageKey::AdminRoomAtLeastOne));
+        return Ok(state.i18n.get(lang, &MessageKey::AdminRoomAtLeastOne));
     }
 
-    let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+    with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
             guild_settings::ensure_guild(txn, guild_id.get()).await?;
-            guild_settings::get_language(txn, guild_id.get()).await
+            Ok(())
         })
     })
-    .await
-    .unwrap_or_else(|_| "en".to_string());
+    .await?;
 
     with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
@@ -44,7 +39,7 @@ pub async fn handle(
     })
     .await?;
 
-    Ok(state.i18n.get(&lang, &MessageKey::AdminRoomRegistered))
+    Ok(state.i18n.get(lang, &MessageKey::AdminRoomRegistered))
 }
 
 fn extract_optional_channel(data: &CommandData, name: &str) -> Option<u64> {

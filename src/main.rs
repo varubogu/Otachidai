@@ -41,6 +41,7 @@ async fn main() -> anyhow::Result<()> {
         http,
         application_id,
         i18n,
+        config_language: config.app_language.clone(),
         rental_states,
     });
 

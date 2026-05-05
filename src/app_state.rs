@@ -10,5 +10,6 @@ pub struct AppState {
     pub http: Arc<HttpClient>,
     pub application_id: Id<ApplicationMarker>,
     pub i18n: Arc<I18n>,
+    pub config_language: Option<String>,
     pub rental_states: RentalStateMap,
 }

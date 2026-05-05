@@ -9,6 +9,7 @@ mod m20240001_000006_create_scheduled_tasks;
 mod m20240001_000007_create_notifications;
 mod m20240001_000008_grant_permissions;
 mod m20240001_000009_enable_rls;
+mod m20240001_000010_default_language_ja;
 
 pub struct Migrator;
 
@@ -25,6 +26,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240001_000007_create_notifications::Migration),
             Box::new(m20240001_000008_grant_permissions::Migration),
             Box::new(m20240001_000009_enable_rls::Migration),
+            Box::new(m20240001_000010_default_language_ja::Migration),
         ]
     }
 }

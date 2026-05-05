@@ -1,7 +1,8 @@
 use crate::app_state::AppState;
 use crate::db::rls::with_guild_context;
 use crate::error::BotResult;
-use crate::facade::{guild_settings, room as room_facade};
+use crate::facade::room as room_facade;
+use crate::language::resolve_language;
 use crate::rental::{
     flow as rental_flow, handoff,
     state_machine::{RentalState, state_key},
@@ -16,13 +17,27 @@ pub async fn handle(state: Arc<AppState>, event: Box<VoiceStateUpdate>) -> BotRe
         return Ok(());
     };
     let user_id = event.user_id;
+    let user_locale = event
+        .member
+        .as_ref()
+        .and_then(|member| member.user.locale.as_deref())
+        .map(ToOwned::to_owned);
 
     match event.channel_id {
-        Some(channel_id) => handle_join(state, guild_id, user_id, channel_id).await,
+        Some(channel_id) => {
+            handle_join(state, guild_id, user_id, channel_id, user_locale.as_deref()).await
+        }
         None => {
             let left_vc = find_user_current_vc(&state, user_id.get());
             if let Some(vc_id) = left_vc {
-                handle_leave(state, guild_id, user_id, Id::new(vc_id)).await
+                handle_leave(
+                    state,
+                    guild_id,
+                    user_id,
+                    Id::new(vc_id),
+                    user_locale.as_deref(),
+                )
+                .await
             } else {
                 Ok(())
             }
@@ -35,6 +50,7 @@ async fn handle_join(
     guild_id: twilight_model::id::Id<twilight_model::id::marker::GuildMarker>,
     user_id: twilight_model::id::Id<twilight_model::id::marker::UserMarker>,
     channel_id: twilight_model::id::Id<twilight_model::id::marker::ChannelMarker>,
+    discord_locale: Option<&str>,
 ) -> BotResult<()> {
     let room = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
@@ -50,18 +66,14 @@ async fn handle_join(
         return Ok(());
     }
 
-    tracing::info!(%guild_id, %user_id, %channel_id, "User joined empty rental VC");
+    let lang = resolve_language(&state, guild_id, discord_locale).await;
+    tracing::info!(%guild_id, %user_id, %channel_id, %lang, discord_locale = ?discord_locale, "User joined empty rental VC");
 
     let result =
-        rental_flow::start_rental(state.clone(), guild_id, user_id, Some(channel_id)).await?;
+        rental_flow::start_rental(state.clone(), guild_id, user_id, Some(channel_id), &lang)
+            .await?;
 
     if let Some((_session_id, _room_id, _modal_response)) = result {
-        let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-            Box::pin(async move { guild_settings::get_language(txn, guild_id.get()).await })
-        })
-        .await
-        .unwrap_or_else(|_| "en".to_string());
-
         let prompt = state
             .i18n
             .get(&lang, &crate::i18n::MessageKey::BotRentalRequestStart);
@@ -98,6 +110,7 @@ async fn handle_leave(
     guild_id: twilight_model::id::Id<twilight_model::id::marker::GuildMarker>,
     user_id: twilight_model::id::Id<twilight_model::id::marker::UserMarker>,
     channel_id: twilight_model::id::Id<twilight_model::id::marker::ChannelMarker>,
+    discord_locale: Option<&str>,
 ) -> BotResult<()> {
     let key = state_key(guild_id, channel_id);
     let (session_id, room_id, is_host_leaving) = {
@@ -110,11 +123,7 @@ async fn handle_leave(
     }; // dashmap Ref dropped here
 
     if is_host_leaving {
-        let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-            Box::pin(async move { guild_settings::get_language(txn, guild_id.get()).await })
-        })
-        .await
-        .unwrap_or_else(|_| "en".to_string());
+        let lang = resolve_language(&state, guild_id, discord_locale).await;
 
         handoff::initiate_handoff(state, guild_id, channel_id, session_id, room_id, &lang).await?;
     }

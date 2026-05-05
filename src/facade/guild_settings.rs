@@ -6,6 +6,8 @@ use sea_orm::{
     sea_query::OnConflict,
 };
 
+pub const DEFAULT_LANGUAGE: &str = "ja";
+
 pub async fn ensure_guild<C: ConnectionTrait>(db: &C, guild_id: u64) -> BotResult<guilds::Model> {
     let id = guild_id as i64;
     if let Some(g) = guilds::Entity::find_by_id(id).one(db).await? {
@@ -14,7 +16,7 @@ pub async fn ensure_guild<C: ConnectionTrait>(db: &C, guild_id: u64) -> BotResul
     let now = chrono::Utc::now().fixed_offset();
     let model = guilds::ActiveModel {
         guild_id: Set(id),
-        language: Set("en".to_string()),
+        language: Set(DEFAULT_LANGUAGE.to_string()),
         created_at: Set(now),
         updated_at: Set(now),
     };
@@ -42,7 +44,7 @@ pub async fn get_language<C: ConnectionTrait>(db: &C, guild_id: u64) -> BotResul
     let guild = guilds::Entity::find_by_id(guild_id as i64).one(db).await?;
     Ok(guild
         .map(|g| g.language)
-        .unwrap_or_else(|| "en".to_string()))
+        .unwrap_or_else(|| DEFAULT_LANGUAGE.to_string()))
 }
 
 pub async fn set_report_channel<C: ConnectionTrait>(

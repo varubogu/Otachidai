@@ -37,6 +37,8 @@ Persists:
 - Registered rooms
 - Current rental state (who is using which room)
 
+Supported languages are `ja` and `en`. Language resolution priority is Discord user locale, `.env.app` `APP_LANGUAGE`, then `guild_master.guilds.language`. If `APP_LANGUAGE` is unset and no guild setting exists, the default is `ja`.
+
 ## Event Processing Flows
 
 ### Rental Request (via VC join)
@@ -48,7 +50,7 @@ VC join event
     │
     ├─ Empty VC? → start request flow
     │       │
-    │       ├─ Send DM / message asking for purpose
+    │       ├─ Send a purpose prompt to the VC's built-in chat or registered text channel
     │       │
     │       └─ Start 10-minute timeout task
     │               │

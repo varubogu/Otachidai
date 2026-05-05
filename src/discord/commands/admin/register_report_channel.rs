@@ -14,17 +14,17 @@ pub async fn handle(
     state: Arc<AppState>,
     guild_id: Id<GuildMarker>,
     data: &CommandData,
+    lang: &str,
 ) -> BotResult<String> {
     let channel_id = extract_channel(data, "channel")?;
 
-    let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+    with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
             guild_settings::ensure_guild(txn, guild_id.get()).await?;
-            guild_settings::get_language(txn, guild_id.get()).await
+            Ok(())
         })
     })
-    .await
-    .unwrap_or_else(|_| "en".to_string());
+    .await?;
 
     with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
@@ -35,11 +35,9 @@ pub async fn handle(
 
     let mut args = FluentArgs::new();
     args.set("channel", format!("<#{channel_id}>"));
-    Ok(state.i18n.get_with_args(
-        &lang,
-        &MessageKey::AdminReportChannelRegistered,
-        Some(&args),
-    ))
+    Ok(state
+        .i18n
+        .get_with_args(lang, &MessageKey::AdminReportChannelRegistered, Some(&args)))
 }
 
 pub fn extract_channel(data: &CommandData, name: &str) -> BotResult<u64> {

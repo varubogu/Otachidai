@@ -22,7 +22,7 @@ async fn test_ensure_guild_creates_entry() {
         Box::pin(async move {
             let guild = guild_settings::ensure_guild(txn, guild_id).await.unwrap();
             assert_eq!(guild.guild_id, guild_id as i64);
-            assert_eq!(guild.language, "en");
+            assert_eq!(guild.language, "ja");
             Ok(())
         })
     })

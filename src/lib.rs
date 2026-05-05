@@ -6,4 +6,5 @@ pub mod entities;
 pub mod error;
 pub mod facade;
 pub mod i18n;
+pub mod language;
 pub mod rental;

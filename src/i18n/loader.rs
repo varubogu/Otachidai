@@ -1,4 +1,5 @@
 use crate::error::{BotError, BotResult};
+use crate::facade::guild_settings::DEFAULT_LANGUAGE;
 use crate::i18n::MessageKey;
 use fluent_bundle::{FluentArgs, FluentResource, concurrent::FluentBundle as ConcurrentBundle};
 use std::collections::HashMap;
@@ -12,7 +13,7 @@ pub struct I18n {
 impl I18n {
     pub fn load(locales_dir: &str) -> BotResult<Self> {
         let mut bundles = HashMap::new();
-        let default_lang = "en".to_string();
+        let default_lang = DEFAULT_LANGUAGE.to_string();
 
         for lang in &["en", "ja"] {
             let path = format!("{locales_dir}/{lang}/main.ftl");

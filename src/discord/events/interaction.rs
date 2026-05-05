@@ -1,8 +1,7 @@
 use crate::app_state::AppState;
-use crate::db::rls::with_guild_context;
 use crate::error::BotResult;
-use crate::facade::guild_settings;
 use crate::i18n::MessageKey;
+use crate::language::resolve_language;
 use crate::rental::{flow as rental_flow, handoff};
 use std::sync::Arc;
 use twilight_model::{
@@ -53,11 +52,13 @@ async fn handle_command(
     );
 
     if is_admin_command && !check_admin_permission(&interaction) {
-        let lang = get_lang(&state, guild_id).await;
+        let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
         let msg = state.i18n.get(&lang, &MessageKey::AdminPermissionDenied);
         respond_ephemeral(&state, &interaction, &msg).await?;
         return Ok(());
     }
+
+    let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
 
     let response: InteractionResponse = match data.name.as_str() {
         "register_report_channel" => {
@@ -65,6 +66,7 @@ async fn handle_command(
                 state.clone(),
                 guild_id,
                 data,
+                &lang,
             )
             .await
             .unwrap_or_else(|e| {
@@ -78,6 +80,7 @@ async fn handle_command(
                 state.clone(),
                 guild_id,
                 data,
+                &lang,
             )
             .await
             .unwrap_or_else(|e| {
@@ -91,6 +94,7 @@ async fn handle_command(
                 state.clone(),
                 guild_id,
                 data,
+                &lang,
             )
             .await
             .unwrap_or_else(|e| {
@@ -100,23 +104,29 @@ async fn handle_command(
             simple_response(&msg)
         }
         "delete_room" => {
-            let msg =
-                crate::discord::commands::admin::delete_room::handle(state.clone(), guild_id, data)
-                    .await
-                    .unwrap_or_else(|e| {
-                        tracing::error!("{e}");
-                        "Error".to_string()
-                    });
-            simple_response(&msg)
-        }
-        "rent" => crate::discord::commands::user::rent::handle(state.clone(), guild_id, user_id)
+            let msg = crate::discord::commands::admin::delete_room::handle(
+                state.clone(),
+                guild_id,
+                data,
+                &lang,
+            )
             .await
             .unwrap_or_else(|e| {
                 tracing::error!("{e}");
-                simple_response("Error")
-            }),
+                "Error".to_string()
+            });
+            simple_response(&msg)
+        }
+        "rent" => {
+            crate::discord::commands::user::rent::handle(state.clone(), guild_id, user_id, &lang)
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("{e}");
+                    simple_response("Error")
+                })
+        }
         "help" => {
-            let msg = crate::discord::commands::user::help::handle(state.clone(), guild_id)
+            let msg = crate::discord::commands::user::help::handle(state.clone(), &lang)
                 .await
                 .unwrap_or_else(|e| {
                     tracing::error!("{e}");
@@ -149,8 +159,9 @@ async fn handle_component(
     let user_id = interaction_user_id(&interaction);
 
     if data.custom_id == "rental_start" {
+        let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
         let response =
-            crate::discord::commands::user::rent::handle(state.clone(), guild_id, user_id)
+            crate::discord::commands::user::rent::handle(state.clone(), guild_id, user_id, &lang)
                 .await
                 .unwrap_or_else(|e| {
                     tracing::error!("{e}");
@@ -171,7 +182,7 @@ async fn handle_component(
             && let (Ok(session_id), Ok(_room_id)) =
                 (parts[0].parse::<i32>(), parts[1].parse::<i32>())
         {
-            let lang = get_lang(&state, guild_id).await;
+            let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
             let message_id = interaction
                 .message
                 .as_ref()
@@ -233,6 +244,7 @@ async fn handle_modal(
         {
             let purpose = extract_modal_text(data, "purpose_text");
             let vc_id = find_vc_for_session(&state, session_id);
+            let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
 
             let msg = rental_flow::submit_purpose(
                 state.clone(),
@@ -241,6 +253,7 @@ async fn handle_modal(
                 session_id,
                 purpose,
                 vc_id,
+                &lang,
             )
             .await
             .unwrap_or_else(|e| {
@@ -322,12 +335,12 @@ fn check_admin_permission(interaction: &Interaction) -> bool {
         .unwrap_or(false)
 }
 
-async fn get_lang(state: &AppState, guild_id: Id<GuildMarker>) -> String {
-    with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-        Box::pin(async move { guild_settings::get_language(txn, guild_id.get()).await })
-    })
-    .await
-    .unwrap_or_else(|_| "en".to_string())
+async fn get_lang(
+    state: &AppState,
+    guild_id: Id<GuildMarker>,
+    discord_locale: Option<&str>,
+) -> String {
+    resolve_language(state, guild_id, discord_locale).await
 }
 
 fn simple_response(content: &str) -> InteractionResponse {

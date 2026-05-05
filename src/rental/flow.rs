@@ -2,8 +2,9 @@ use crate::app_state::AppState;
 use crate::db::rls::with_guild_context;
 use crate::entities::{rental_sessions, rooms};
 use crate::error::BotResult;
-use crate::facade::{guild_settings, rental as rental_facade, room as room_facade};
+use crate::facade::{rental as rental_facade, room as room_facade};
 use crate::i18n::MessageKey;
+use crate::language::resolve_language;
 use crate::rental::state_machine::{RentalState, RentalStateEntry};
 use crate::rental::timeout::spawn_purpose_timeout;
 use fluent_bundle::FluentArgs;
@@ -58,13 +59,8 @@ pub async fn start_rental(
     guild_id: Id<GuildMarker>,
     user_id: Id<UserMarker>,
     voice_channel_id: Option<Id<ChannelMarker>>,
+    lang: &str,
 ) -> BotResult<Option<(i32, i32, InteractionResponse)>> {
-    let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-        Box::pin(async move { guild_settings::get_language(txn, guild_id.get()).await })
-    })
-    .await
-    .unwrap_or_else(|_| "en".to_string());
-
     let existing = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
             rental_facade::find_active_session_for_user(txn, guild_id.get(), user_id.get()).await
@@ -141,7 +137,7 @@ pub async fn start_rental(
         },
     );
 
-    let response = build_purpose_modal(&state, &lang, session.id, room_id);
+    let response = build_purpose_modal(&state, lang, session.id, room_id);
     Ok(Some((session.id, room_id, response)))
 }
 
@@ -152,13 +148,8 @@ pub async fn submit_purpose(
     session_id: i32,
     purpose: String,
     voice_channel_id: u64,
+    lang: &str,
 ) -> BotResult<String> {
-    let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-        Box::pin(async move { guild_settings::get_language(txn, guild_id.get()).await })
-    })
-    .await
-    .unwrap_or_else(|_| "en".to_string());
-
     let key = (guild_id.get(), voice_channel_id);
     if let Some(entry) = state.rental_states.get(&key) {
         entry.abort_timeout();
@@ -213,7 +204,7 @@ pub async fn submit_purpose(
     args.set("channel", channel_mention);
     Ok(state
         .i18n
-        .get_with_args(&lang, &MessageKey::BotRentalAssigned, Some(&args)))
+        .get_with_args(lang, &MessageKey::BotRentalAssigned, Some(&args)))
 }
 
 pub async fn release_rental(
@@ -222,11 +213,7 @@ pub async fn release_rental(
     _user_id: Id<UserMarker>,
     voice_channel_id: u64,
 ) -> BotResult<String> {
-    let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-        Box::pin(async move { guild_settings::get_language(txn, guild_id.get()).await })
-    })
-    .await
-    .unwrap_or_else(|_| "en".to_string());
+    let lang = resolve_language(&state, guild_id, None).await;
 
     let key = (guild_id.get(), voice_channel_id);
     let (session_id, room_id) = {

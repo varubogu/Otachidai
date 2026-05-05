@@ -11,7 +11,7 @@ impl MigrationTrait for Migration {
             .execute_unprepared(
                 "CREATE TABLE guild_master.guilds (
                     guild_id   BIGINT PRIMARY KEY,
-                    language   VARCHAR(5) NOT NULL DEFAULT 'en',
+                    language   VARCHAR(5) NOT NULL DEFAULT 'ja',
                     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
                 )",

@@ -1,4 +1,5 @@
 use crate::error::{BotError, BotResult};
+use crate::language::normalize_language;
 
 #[derive(Debug, Clone)]
 pub struct DbRoleConfig {
@@ -18,6 +19,7 @@ pub struct AppConfig {
     pub global_db: DbRoleConfig,
     pub admin_db: DbRoleConfig,
     pub rust_log: String,
+    pub app_language: Option<String>,
 }
 
 impl AppConfig {
@@ -48,6 +50,7 @@ impl AppConfig {
                 password: require_env("ADMIN_DB_PASSWORD")?,
             },
             rust_log: std::env::var("RUST_LOG").unwrap_or_else(|_| "info".to_string()),
+            app_language: optional_language_env("APP_LANGUAGE")?,
         })
     }
 
@@ -61,4 +64,13 @@ impl AppConfig {
 
 fn require_env(key: &str) -> BotResult<String> {
     std::env::var(key).map_err(|_| BotError::Env(key.to_string()))
+}
+
+fn optional_language_env(key: &str) -> BotResult<Option<String>> {
+    let Ok(value) = std::env::var(key) else {
+        return Ok(None);
+    };
+    normalize_language(&value)
+        .map(|lang| Some(lang.to_string()))
+        .ok_or_else(|| BotError::Parse(format!("{key} must be ja or en")))
 }

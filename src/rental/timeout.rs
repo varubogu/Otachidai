@@ -3,12 +3,16 @@ use crate::db::rls::with_guild_context;
 use crate::entities::scheduled_tasks;
 use crate::facade::rental as rental_facade;
 use crate::i18n::MessageKey;
+use crate::language::resolve_language;
 use fluent_bundle::FluentArgs;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::task::JoinHandle;
-use twilight_model::id::{Id, marker::ChannelMarker};
+use twilight_model::id::{
+    Id,
+    marker::{ChannelMarker, GuildMarker},
+};
 
 pub fn spawn_purpose_timeout(
     state: Arc<AppState>,
@@ -54,11 +58,7 @@ async fn handle_purpose_timeout(
 
     state.rental_states.remove(&(guild_id, voice_channel_id));
 
-    let lang = with_guild_context(&state.db.guild, guild_id, |txn| {
-        Box::pin(async move { crate::facade::guild_settings::get_language(txn, guild_id).await })
-    })
-    .await
-    .unwrap_or_else(|_| "en".to_string());
+    let lang = resolve_language(state, Id::<GuildMarker>::new(guild_id), None).await;
 
     let report_channel_id = with_guild_context(&state.db.guild, guild_id, |txn| {
         Box::pin(

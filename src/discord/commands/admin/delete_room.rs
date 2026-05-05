@@ -1,7 +1,7 @@
 use crate::app_state::AppState;
 use crate::db::rls::with_guild_context;
 use crate::error::BotResult;
-use crate::facade::{guild_settings, room as room_facade};
+use crate::facade::room as room_facade;
 use crate::i18n::MessageKey;
 use std::sync::Arc;
 use twilight_model::application::interaction::application_command::{
@@ -13,15 +13,10 @@ pub async fn handle(
     state: Arc<AppState>,
     guild_id: Id<GuildMarker>,
     data: &CommandData,
+    lang: &str,
 ) -> BotResult<String> {
     let text_channel_id = extract_optional_channel(data, "text_channel");
     let voice_channel_id = extract_optional_channel(data, "voice_channel");
-
-    let lang = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-        Box::pin(async move { guild_settings::get_language(txn, guild_id.get()).await })
-    })
-    .await
-    .unwrap_or_else(|_| "en".to_string());
 
     let deleted = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
@@ -31,9 +26,9 @@ pub async fn handle(
     .await?;
 
     if deleted {
-        Ok(state.i18n.get(&lang, &MessageKey::AdminRoomDeleted))
+        Ok(state.i18n.get(lang, &MessageKey::AdminRoomDeleted))
     } else {
-        Ok(state.i18n.get(&lang, &MessageKey::AdminRoomNotFound))
+        Ok(state.i18n.get(lang, &MessageKey::AdminRoomNotFound))
     }
 }
 
