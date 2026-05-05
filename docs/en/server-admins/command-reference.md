@@ -56,6 +56,7 @@ Registers a room available for rental.
 
 A room can be a text channel alone, a voice channel alone, or a text+VC pair.  
 When both IDs are provided, the requester is granted access to both channels together.
+For VC-only rooms, prompts are posted to the VC's built-in text chat. For text+VC pairs, prompts are posted to the specified text channel.
 
 ```
 # Text + VC pair

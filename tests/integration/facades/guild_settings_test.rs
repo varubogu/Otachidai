@@ -1,4 +1,4 @@
-use otachidai::{config::AppConfig, db::DbPools, facade::guild_settings};
+use otachidai::facade::guild_settings;
 
 fn db_url() -> String {
     let host = std::env::var("DB_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
@@ -18,11 +18,13 @@ async fn test_ensure_guild_creates_entry() {
 
     let guild_id: u64 = 999_000_000_000_000_001;
 
-    otachidai::db::rls::with_guild_context(&db, guild_id, |txn| async move {
-        let guild = guild_settings::ensure_guild(txn, guild_id).await.unwrap();
-        assert_eq!(guild.guild_id, guild_id as i64);
-        assert_eq!(guild.language, "en");
-        Ok(())
+    otachidai::db::rls::with_guild_context(&db, guild_id, |txn| {
+        Box::pin(async move {
+            let guild = guild_settings::ensure_guild(txn, guild_id).await.unwrap();
+            assert_eq!(guild.guild_id, guild_id as i64);
+            assert_eq!(guild.language, "en");
+            Ok(())
+        })
     })
     .await
     .unwrap();
@@ -38,16 +40,18 @@ async fn test_set_and_get_report_channel() {
     let guild_id: u64 = 999_000_000_000_000_002;
     let channel_id: u64 = 123_456_789;
 
-    otachidai::db::rls::with_guild_context(&db, guild_id, |txn| async move {
-        guild_settings::ensure_guild(txn, guild_id).await.unwrap();
-        guild_settings::set_report_channel(txn, guild_id, channel_id)
-            .await
-            .unwrap();
-        let retrieved = guild_settings::get_report_channel(txn, guild_id)
-            .await
-            .unwrap();
-        assert_eq!(retrieved, Some(channel_id as i64));
-        Ok(())
+    otachidai::db::rls::with_guild_context(&db, guild_id, |txn| {
+        Box::pin(async move {
+            guild_settings::ensure_guild(txn, guild_id).await.unwrap();
+            guild_settings::set_report_channel(txn, guild_id, channel_id)
+                .await
+                .unwrap();
+            let retrieved = guild_settings::get_report_channel(txn, guild_id)
+                .await
+                .unwrap();
+            assert_eq!(retrieved, Some(channel_id as i64));
+            Ok(())
+        })
     })
     .await
     .unwrap();

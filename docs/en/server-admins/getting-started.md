@@ -41,7 +41,8 @@ Register rooms available for rental. A room can be a text channel, a voice chann
 ```
 
 - Either argument alone is valid (e.g., VC-only room)
-- Providing both creates a paired text+VC room
+- For VC-only rooms, prompts are posted to the VC's built-in text chat
+- Providing both creates a paired text+VC room, and prompts are posted to the specified text channel
 - Repeat the command to register multiple rooms
 
 ### Examples

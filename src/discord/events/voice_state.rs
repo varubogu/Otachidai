@@ -7,6 +7,7 @@ use crate::rental::{
     state_machine::{RentalState, state_key},
 };
 use std::sync::Arc;
+use twilight_model::channel::message::AllowedMentions;
 use twilight_model::gateway::payload::incoming::VoiceStateUpdate;
 use twilight_model::id::Id;
 
@@ -42,7 +43,7 @@ async fn handle_join(
     })
     .await?;
 
-    let Some(_room) = room else { return Ok(()) };
+    let Some(room) = room else { return Ok(()) };
 
     let key = state_key(guild_id, channel_id);
     if state.rental_states.contains_key(&key) {
@@ -65,19 +66,27 @@ async fn handle_join(
             .i18n
             .get(&lang, &crate::i18n::MessageKey::BotRentalRequestStart);
 
-        if let Ok(dm) = state.http.create_private_channel(user_id).await
-            && let Ok(ch) = dm.model().await
+        use crate::discord::components::rental_button::build_rental_button;
+        let btn_label = state
+            .i18n
+            .get(&lang, &crate::i18n::MessageKey::RentButtonLabel);
+        let content = format!("<@{}>\n{}", user_id.get(), prompt);
+        let allowed_mentions = AllowedMentions {
+            users: vec![user_id],
+            ..Default::default()
+        };
+
+        let notification_channel_id = prompt_channel_id(room.text_channel_id, channel_id);
+
+        if let Err(err) = state
+            .http
+            .create_message(notification_channel_id)
+            .content(&content)
+            .allowed_mentions(Some(&allowed_mentions))
+            .components(&build_rental_button(btn_label))
+            .await
         {
-            use crate::discord::components::rental_button::build_rental_button;
-            let btn_label = state
-                .i18n
-                .get(&lang, &crate::i18n::MessageKey::RentButtonLabel);
-            let _ = state
-                .http
-                .create_message(ch.id)
-                .content(&prompt)
-                .components(&build_rental_button(btn_label))
-                .await;
+            tracing::warn!(%guild_id, %user_id, %channel_id, %notification_channel_id, error = %err, "Failed to post rental prompt");
         }
     }
 
@@ -122,4 +131,36 @@ fn find_user_current_vc(state: &AppState, user_id: u64) -> Option<u64> {
         }
     }
     None
+}
+
+fn prompt_channel_id(
+    text_channel_id: Option<i64>,
+    voice_channel_id: twilight_model::id::Id<twilight_model::id::marker::ChannelMarker>,
+) -> twilight_model::id::Id<twilight_model::id::marker::ChannelMarker> {
+    text_channel_id
+        .map(|id| Id::new(id as u64))
+        .unwrap_or(voice_channel_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::prompt_channel_id;
+    use twilight_model::id::{Id, marker::ChannelMarker};
+
+    #[test]
+    fn prompt_channel_uses_paired_text_channel_when_registered() {
+        let voice_channel_id = Id::<ChannelMarker>::new(100);
+
+        assert_eq!(
+            prompt_channel_id(Some(200), voice_channel_id),
+            Id::<ChannelMarker>::new(200)
+        );
+    }
+
+    #[test]
+    fn prompt_channel_falls_back_to_voice_channel_chat() {
+        let voice_channel_id = Id::<ChannelMarker>::new(100);
+
+        assert_eq!(prompt_channel_id(None, voice_channel_id), voice_channel_id);
+    }
 }
