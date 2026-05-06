@@ -10,12 +10,14 @@ pub async fn register_room<C: ConnectionTrait>(
     guild_id: u64,
     text_channel_id: Option<u64>,
     voice_channel_id: Option<u64>,
+    question_preset_id: Option<i32>,
 ) -> BotResult<rooms::Model> {
     let model = rooms::ActiveModel {
         guild_id: Set(guild_id as i64),
         text_channel_id: Set(text_channel_id.map(|id| id as i64)),
         voice_channel_id: Set(voice_channel_id.map(|id| id as i64)),
         is_available: Set(true),
+        question_preset_id: Set(question_preset_id),
         created_at: Set(chrono::Utc::now().fixed_offset()),
         ..Default::default()
     };

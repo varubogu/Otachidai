@@ -2,7 +2,9 @@ use crate::app_state::AppState;
 use crate::db::rls::with_guild_context;
 use crate::entities::{rental_sessions, rooms};
 use crate::error::BotResult;
-use crate::facade::{rental as rental_facade, room as room_facade};
+use crate::facade::{
+    question_preset as question_preset_facade, rental as rental_facade, room as room_facade,
+};
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
 use crate::rental::state_machine::{RentalState, RentalStateEntry};
@@ -21,10 +23,15 @@ use twilight_model::{
 };
 
 pub enum StartRentalResult {
-    Started {
+    AwaitingQuestions {
         session_id: i32,
         room_id: i32,
         response: InteractionResponse,
+    },
+    Assigned {
+        session_id: i32,
+        room_id: i32,
+        message: String,
     },
     AlreadyRenting,
     NoAvailableRooms,
@@ -35,9 +42,20 @@ pub fn build_purpose_modal(
     lang: &str,
     session_id: i32,
     room_id: i32,
+    questions: &[String],
 ) -> InteractionResponse {
     let title = state.i18n.get(lang, &MessageKey::BotRentalRequestStart);
-    let label = state.i18n.get(lang, &MessageKey::BotRentalPurposeLabel);
+    let label = if questions.is_empty() {
+        state.i18n.get(lang, &MessageKey::BotRentalPurposeLabel)
+    } else {
+        state.i18n.get(lang, &MessageKey::BotRentalAnswersLabel)
+    };
+    let value = if questions.is_empty() {
+        None
+    } else {
+        let answer_prefix = state.i18n.get(lang, &MessageKey::BotRentalAnswerPrefix);
+        Some(answer_template(questions, &answer_prefix))
+    };
 
     InteractionResponse {
         kind: InteractionResponseType::Modal,
@@ -53,15 +71,81 @@ pub fn build_purpose_modal(
                     label: Some(label),
                     style: TextInputStyle::Paragraph,
                     min_length: Some(1),
-                    max_length: Some(500),
+                    max_length: Some(4000),
                     placeholder: None,
                     required: Some(true),
-                    value: None,
+                    value,
                 })],
             })]),
             ..Default::default()
         }),
     }
+}
+
+pub async fn build_purpose_modal_for_room(
+    state: &AppState,
+    guild_id: Id<GuildMarker>,
+    lang: &str,
+    session_id: i32,
+    room_id: i32,
+) -> BotResult<InteractionResponse> {
+    let questions = questions_for_room(state, guild_id, room_id).await?;
+    Ok(build_purpose_modal(
+        state, lang, session_id, room_id, &questions,
+    ))
+}
+
+fn answer_template(questions: &[String], answer_prefix: &str) -> String {
+    questions
+        .iter()
+        .enumerate()
+        .map(|(index, question)| format!("{}. {question}\n{answer_prefix}: ", index + 1))
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+async fn questions_for_room(
+    state: &AppState,
+    guild_id: Id<GuildMarker>,
+    room_id: i32,
+) -> BotResult<Vec<String>> {
+    let room = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+        Box::pin(async move {
+            rooms::Entity::find_by_id(room_id)
+                .one(txn)
+                .await
+                .map_err(crate::error::BotError::from)?
+                .ok_or_else(|| crate::error::BotError::NotFound(format!("room {room_id}")))
+        })
+    })
+    .await?;
+
+    let Some(preset_id) = room.question_preset_id else {
+        return Ok(Vec::new());
+    };
+
+    let preset = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+        Box::pin(async move { question_preset_facade::find_by_id(txn, preset_id).await })
+    })
+    .await?;
+
+    Ok(preset.map(|preset| preset.questions()).unwrap_or_default())
+}
+
+fn assigned_message(state: &AppState, lang: &str, room: &rooms::Model) -> String {
+    let channel_mention = room_channel_mention(room);
+    let mut args = FluentArgs::new();
+    args.set("channel", channel_mention);
+    state
+        .i18n
+        .get_with_args(lang, &MessageKey::BotRentalAssigned, Some(&args))
+}
+
+fn room_channel_mention(room: &rooms::Model) -> String {
+    room.text_channel_id
+        .map(|id| format!("<#{id}>"))
+        .or_else(|| room.voice_channel_id.map(|id| format!("<#{id}>")))
+        .unwrap_or_else(|| "the room".to_string())
 }
 
 pub async fn start_rental(
@@ -90,10 +174,17 @@ pub async fn start_rental(
             )
         });
         if existing.state == rental_sessions::STATE_AWAITING_PURPOSE && has_pending_state {
-            return Ok(StartRentalResult::Started {
+            let questions = questions_for_room(&state, guild_id, existing.room_id).await?;
+            return Ok(StartRentalResult::AwaitingQuestions {
                 session_id: existing.id,
                 room_id: existing.room_id,
-                response: build_purpose_modal(&state, lang, existing.id, existing.room_id),
+                response: build_purpose_modal(
+                    &state,
+                    lang,
+                    existing.id,
+                    existing.room_id,
+                    &questions,
+                ),
             });
         }
 
@@ -142,47 +233,77 @@ pub async fn start_rental(
     let vc_channel_for_key = voice_channel_id
         .or_else(|| room.voice_channel_id.map(|id| Id::new(id as u64)))
         .unwrap_or_else(|| Id::new(0));
+    let questions = questions_for_room(&state, guild_id, room_id).await?;
 
-    let session = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-        Box::pin(async move {
-            rental_facade::create_session(txn, guild_id.get(), room_id, user_id.get()).await
+    let session = if questions.is_empty() {
+        with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+            Box::pin(async move {
+                rental_facade::create_active_session(txn, guild_id.get(), room_id, user_id.get())
+                    .await
+            })
         })
-    })
-    .await?;
+        .await?
+    } else {
+        with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+            Box::pin(async move {
+                rental_facade::create_session(txn, guild_id.get(), room_id, user_id.get()).await
+            })
+        })
+        .await?
+    };
 
     with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move { room_facade::set_room_availability(txn, room_id, false).await })
     })
     .await?;
 
-    let timeout = spawn_purpose_timeout(
-        state.clone(),
-        guild_id.get(),
-        vc_channel_for_key.get(),
-        session.id,
-        0,
-        Duration::from_secs(rental_facade::PURPOSE_TIMEOUT_MINUTES as u64 * 60),
-    );
-
     let key = (guild_id.get(), vc_channel_for_key.get());
-    state.rental_states.insert(
-        key,
-        RentalStateEntry {
-            state: RentalState::AwaitingPurpose {
-                session_id: session.id,
-                host_user_id: user_id.get(),
-                timeout_task: timeout,
+    if questions.is_empty() {
+        state.rental_states.insert(
+            key,
+            RentalStateEntry {
+                state: RentalState::Active {
+                    session_id: session.id,
+                    host_user_id: user_id.get(),
+                },
+                room_id,
             },
-            room_id,
-        },
-    );
+        );
 
-    let response = build_purpose_modal(&state, lang, session.id, room_id);
-    Ok(StartRentalResult::Started {
-        session_id: session.id,
-        room_id,
-        response,
-    })
+        Ok(StartRentalResult::Assigned {
+            session_id: session.id,
+            room_id,
+            message: assigned_message(&state, lang, &room),
+        })
+    } else {
+        let timeout = spawn_purpose_timeout(
+            state.clone(),
+            guild_id.get(),
+            vc_channel_for_key.get(),
+            session.id,
+            0,
+            Duration::from_secs(rental_facade::PURPOSE_TIMEOUT_MINUTES as u64 * 60),
+        );
+
+        state.rental_states.insert(
+            key,
+            RentalStateEntry {
+                state: RentalState::AwaitingPurpose {
+                    session_id: session.id,
+                    host_user_id: user_id.get(),
+                    timeout_task: timeout,
+                },
+                room_id,
+            },
+        );
+
+        let response = build_purpose_modal(&state, lang, session.id, room_id, &questions);
+        Ok(StartRentalResult::AwaitingQuestions {
+            session_id: session.id,
+            room_id,
+            response,
+        })
+    }
 }
 
 pub async fn submit_purpose(
@@ -238,17 +359,7 @@ pub async fn submit_purpose(
         };
     }
 
-    let channel_mention = room
-        .text_channel_id
-        .map(|id| format!("<#{id}>"))
-        .or_else(|| room.voice_channel_id.map(|id| format!("<#{id}>")))
-        .unwrap_or_else(|| "the room".to_string());
-
-    let mut args = FluentArgs::new();
-    args.set("channel", channel_mention);
-    Ok(state
-        .i18n
-        .get_with_args(lang, &MessageKey::BotRentalAssigned, Some(&args)))
+    Ok(assigned_message(&state, lang, &room))
 }
 
 pub async fn release_rental(

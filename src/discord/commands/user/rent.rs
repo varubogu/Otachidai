@@ -19,7 +19,15 @@ pub async fn handle(
     lang: &str,
 ) -> BotResult<InteractionResponse> {
     match start_rental(state.clone(), guild_id, user_id, None, lang).await? {
-        StartRentalResult::Started { response, .. } => Ok(response),
+        StartRentalResult::AwaitingQuestions { response, .. } => Ok(response),
+        StartRentalResult::Assigned { message, .. } => Ok(InteractionResponse {
+            kind: InteractionResponseType::ChannelMessageWithSource,
+            data: Some(InteractionResponseData {
+                content: Some(message),
+                flags: Some(MessageFlags::EPHEMERAL),
+                ..Default::default()
+            }),
+        }),
         StartRentalResult::AlreadyRenting => {
             let msg = state.i18n.get(lang, &MessageKey::BotRentalAlreadyRenting);
             Ok(InteractionResponse {

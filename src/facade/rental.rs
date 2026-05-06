@@ -42,6 +42,28 @@ pub async fn create_session<C: ConnectionTrait>(
     Ok(session)
 }
 
+pub async fn create_active_session<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+    room_id: i32,
+    host_user_id: u64,
+) -> BotResult<rental_sessions::Model> {
+    let now = Utc::now().fixed_offset();
+
+    let model = rental_sessions::ActiveModel {
+        guild_id: Set(guild_id as i64),
+        room_id: Set(room_id),
+        host_user_id: Set(host_user_id as i64),
+        purpose: Set(None),
+        state: Set(STATE_ACTIVE),
+        started_at: Set(now),
+        purpose_deadline: Set(None),
+        ended_at: Set(None),
+        ..Default::default()
+    };
+    model.insert(db).await.map_err(BotError::from)
+}
+
 pub async fn set_purpose<C: ConnectionTrait>(
     db: &C,
     session_id: i32,

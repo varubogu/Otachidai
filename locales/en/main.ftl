@@ -1,6 +1,8 @@
 ## Rental flow
 bot-rental-request-start = Please describe your purpose for renting. You have 10 minutes.
 bot-rental-purpose-label = Describe your purpose
+bot-rental-answers-label = Answers to questions
+bot-rental-answer-prefix = Answer
 bot-rental-assigned = Room assigned! You now have access to { $channel }.
 bot-rental-timeout = Your rental request has timed out. Please try again.
 bot-rental-report = User { $user } joined a voice channel but did not submit a purpose within 10 minutes.
@@ -18,6 +20,10 @@ bot-handoff-take-over = Take Over
 ## Admin commands
 admin-report-channel-registered = Report channel registered: { $channel }
 admin-rental-button-registered = Rental button channel registered. Button posted in { $channel }.
+admin-question-preset-saved = Question preset saved.
+admin-question-preset-name-required = Please specify a preset name.
+admin-question-preset-at-least-one = Specify at least one of question_1 through question_10.
+admin-question-preset-not-found = The specified question preset was not found.
 admin-room-registered = Room registered successfully.
 admin-room-deleted = Room deleted successfully.
 admin-room-not-found = No room found with those channel IDs.
@@ -32,6 +38,7 @@ help-user = **User Commands**
 help-admin = **Admin Commands**
     `/register_report_channel` — Register the channel for timeout notifications
     `/register_rental_button_channel` — Register the channel where the rental button is posted
+    `/register_question_preset` — Register a question preset for rooms
     `/register_room` — Register a room (text channel, voice channel, or both)
     `/delete_room` — Delete a registered room
 

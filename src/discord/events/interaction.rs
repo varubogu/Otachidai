@@ -47,6 +47,7 @@ async fn handle_command(
         data.name.as_str(),
         "register_report_channel"
             | "register_rental_button_channel"
+            | "register_question_preset"
             | "register_room"
             | "delete_room"
     );
@@ -77,6 +78,20 @@ async fn handle_command(
         }
         "register_rental_button_channel" => {
             let msg = crate::discord::commands::admin::register_rental_button_channel::handle(
+                state.clone(),
+                guild_id,
+                data,
+                &lang,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("{e}");
+                "Error".to_string()
+            });
+            simple_response(&msg)
+        }
+        "register_question_preset" => {
+            let msg = crate::discord::commands::admin::register_question_preset::handle(
                 state.clone(),
                 guild_id,
                 data,
@@ -184,7 +199,14 @@ async fn handle_component(
         {
             let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
             let response = if is_pending_rental_host(&state, session_id, user_id.get()) {
-                rental_flow::build_purpose_modal(&state, &lang, session_id, room_id)
+                rental_flow::build_purpose_modal_for_room(
+                    &state, guild_id, &lang, session_id, room_id,
+                )
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::error!("{e}");
+                    simple_response("Error")
+                })
             } else {
                 let msg = state.i18n.get(&lang, &MessageKey::ErrorGeneric);
                 InteractionResponse {

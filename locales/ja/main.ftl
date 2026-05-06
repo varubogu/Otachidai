@@ -1,6 +1,8 @@
 ## レンタルフロー
 bot-rental-request-start = 利用目的を入力してください。10分以内に送信してください。
 bot-rental-purpose-label = 利用目的
+bot-rental-answers-label = 質問への回答
+bot-rental-answer-prefix = 回答
 bot-rental-assigned = 部屋が割り当てられました！{ $channel } をご利用ください。
 bot-rental-timeout = レンタルリクエストがタイムアウトしました。もう一度お試しください。
 bot-rental-report = ユーザー { $user } がボイスチャンネルに参加しましたが、10分以内に利用目的を送信しませんでした。
@@ -18,6 +20,10 @@ bot-handoff-take-over = 引き継ぐ
 ## 管理者コマンド
 admin-report-channel-registered = レポートチャンネルを登録しました: { $channel }
 admin-rental-button-registered = レンタルボタンチャンネルを登録しました。{ $channel } にボタンを投稿しました。
+admin-question-preset-saved = 質問プリセットを保存しました。
+admin-question-preset-name-required = プリセット名を指定してください。
+admin-question-preset-at-least-one = question_1 ～ question_10 のいずれかを指定してください。
+admin-question-preset-not-found = 指定された質問プリセットが見つかりませんでした。
 admin-room-registered = 部屋を登録しました。
 admin-room-deleted = 部屋を削除しました。
 admin-room-not-found = 指定されたチャンネルIDの部屋が見つかりませんでした。
@@ -32,6 +38,7 @@ help-user = **ユーザーコマンド**
 help-admin = **管理者コマンド**
     `/register_report_channel` — タイムアウト通知チャンネルを登録する
     `/register_rental_button_channel` — レンタルボタンを投稿するチャンネルを登録する
+    `/register_question_preset` — 部屋ごとの質問プリセットを登録する
     `/register_room` — 部屋を登録する（テキストチャンネル、ボイスチャンネル、またはその両方）
     `/delete_room` — 登録済み部屋を削除する
 

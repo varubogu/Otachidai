@@ -93,7 +93,7 @@ async fn handle_join(
         rental_flow::start_rental(state.clone(), guild_id, user_id, Some(channel_id), &lang)
             .await?;
 
-    if let rental_flow::StartRentalResult::Started {
+    if let rental_flow::StartRentalResult::AwaitingQuestions {
         session_id,
         room_id,
         ..
