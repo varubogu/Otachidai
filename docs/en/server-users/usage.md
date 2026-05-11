@@ -23,22 +23,51 @@ You can begin a rental request in three ways:
         ↓
 5. Use the room
         ↓
-6. Notify the bot when you are done
+6. Leave the VC
         ↓
 7. The bot releases the room
 ```
 
-## Ending Your Session
+## Cancelling a Request (Leaving the VC Before Submitting a Purpose)
 
-When you are done with the room, notify otachidai Bot.
-The bot releases the room so the next user can request it.
+If the bot asks you to enter a purpose and you leave the VC without submitting it, the request is cancelled.
 
-## Room Handoff When Leaving a VC
+```
+1. Start a rental request and enter the waiting-for-purpose state
+        ↓
+2. Leave the VC without submitting a purpose
+        ↓
+3. The bot cancels the request and immediately releases the room
+   (server staff are not notified)
+```
 
-If you are the room host and leave the voice channel:
+## Handoff Flow
 
-- **No other participants remain** — the bot automatically releases the room
-- **Others are still present** — the bot asks remaining participants if they want to take over. The first person to accept becomes the new host
+When the room is in use and the room host leaves the VC, a handoff starts if other participants are still in the VC.
+
+```
+1. The room host leaves the VC
+        ↓
+2. The bot posts a message with a handoff button in the channel
+        ↓
+3. A remaining participant clicks the "Take over" button
+        ↓
+4. The participant who clicked the button becomes the new room host and use continues
+```
+
+- If no other participants remain, no handoff occurs and the room is released immediately.
+
+## Cancelling a Handoff (No One Accepts)
+
+If nobody clicks the handoff button while the room is waiting for handoff, the room is automatically released after the timeout.
+
+```
+1. The handoff button is posted
+        ↓
+2. 5 minutes pass without anyone clicking "Take over"
+        ↓
+3. The bot cancels the handoff and automatically releases the room
+```
 
 ## Purpose Submission Timeout
 
