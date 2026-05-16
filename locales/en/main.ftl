@@ -10,6 +10,8 @@ bot-rental-released = Room released. Thank you for using otachidai.
 bot-rental-no-rooms = No rooms are currently available. Please try again later.
 bot-rental-already-renting = You already have an active rental.
 bot-rental-room-occupied = That room is currently occupied.
+bot-rental-dropdown-prompt = Please answer the following questions, then click Confirm.
+bot-rental-dropdown-confirm = Confirm
 
 ## Handoff
 bot-handoff-prompt = The room host has left. Would you like to take over?

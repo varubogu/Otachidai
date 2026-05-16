@@ -10,6 +10,8 @@ bot-rental-released = 部屋を解放しました。ご利用ありがとうご�
 bot-rental-no-rooms = 現在利用可能な部屋がありません。しばらくしてからもう一度お試しください。
 bot-rental-already-renting = すでにアクティブなレンタルがあります。
 bot-rental-room-occupied = その部屋は現在使用中です。
+bot-rental-dropdown-prompt = 以下の質問に回答し、「確認」ボタンを押してください。
+bot-rental-dropdown-confirm = 確認
 
 ## 引き継ぎ
 bot-handoff-prompt = 部屋のホストが退出しました。引き継ぎますか？

@@ -5,12 +5,14 @@ use crate::error::BotResult;
 use crate::facade::{
     question_preset as question_preset_facade, rental as rental_facade, room as room_facade,
 };
+use crate::facade::question_preset::{QuestionInput, QuestionWithInput};
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
-use crate::rental::state_machine::{RentalState, RentalStateEntry};
+use crate::rental::state_machine::{RentalState, RentalStateEntry, get_dropdown_answers};
 use crate::rental::timeout::spawn_purpose_timeout;
 use fluent_bundle::FluentArgs;
 use sea_orm::EntityTrait;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 use twilight_model::id::{
@@ -18,7 +20,13 @@ use twilight_model::id::{
     marker::{ChannelMarker, GuildMarker, UserMarker},
 };
 use twilight_model::{
-    channel::message::component::{ActionRow, Component, TextInput, TextInputStyle},
+    channel::message::{
+        MessageFlags,
+        component::{
+            ActionRow, Button, ButtonStyle, Component, SelectMenu, SelectMenuOption,
+            SelectMenuType, TextInput, TextInputStyle,
+        },
+    },
     http::interaction::{InteractionResponse, InteractionResponseData, InteractionResponseType},
 };
 
@@ -82,6 +90,128 @@ pub fn build_purpose_modal(
     }
 }
 
+/// Build a modal with individual TextInputs for text-only questions (used after dropdown phase).
+pub fn build_text_questions_modal(
+    state: &AppState,
+    lang: &str,
+    session_id: i32,
+    room_id: i32,
+    text_questions: &[&QuestionWithInput],
+) -> InteractionResponse {
+    let title = state.i18n.get(lang, &MessageKey::BotRentalRequestStart);
+
+    let components: Vec<Component> = text_questions
+        .iter()
+        .take(5) // Discord modal limit: 5 ActionRows
+        .map(|q| {
+            Component::ActionRow(ActionRow {
+                id: None,
+                components: vec![Component::TextInput(TextInput {
+                    id: None,
+                    custom_id: format!("qt_{}", q.index),
+                    #[allow(deprecated)]
+                    label: Some(format!("{}. {}", q.index + 1, q.text)),
+                    style: TextInputStyle::Short,
+                    min_length: Some(1),
+                    max_length: Some(200),
+                    placeholder: None,
+                    required: Some(true),
+                    value: None,
+                })],
+            })
+        })
+        .collect();
+
+    InteractionResponse {
+        kind: InteractionResponseType::Modal,
+        data: Some(InteractionResponseData {
+            custom_id: Some(format!("purpose_modal:{session_id}:{room_id}")),
+            title: Some(title),
+            components: Some(components),
+            ..Default::default()
+        }),
+    }
+}
+
+/// Build an ephemeral message with select menus for dropdown questions + a confirm button.
+/// Up to 4 dropdown questions can be shown (Discord limit: 5 ActionRows, 1 used for button).
+pub fn build_dropdown_selection_message(
+    state: &AppState,
+    lang: &str,
+    session_id: i32,
+    room_id: i32,
+    dropdown_questions: &[&QuestionWithInput],
+    existing_answers: &[Option<String>],
+) -> InteractionResponse {
+    let confirm_label = state.i18n.get(lang, &MessageKey::BotRentalDropdownConfirm);
+    let prompt = state.i18n.get(lang, &MessageKey::BotRentalDropdownPrompt);
+
+    let mut action_rows: Vec<Component> = dropdown_questions
+        .iter()
+        .take(4)
+        .map(|q| {
+            let options = if let QuestionInput::Dropdown(opts) = &q.input {
+                let prev = existing_answers
+                    .get(q.index)
+                    .and_then(|a| a.as_deref())
+                    .unwrap_or("");
+                opts.iter()
+                    .map(|opt| SelectMenuOption {
+                        label: opt.clone(),
+                        value: opt.clone(),
+                        description: None,
+                        emoji: None,
+                        default: opt == prev,
+                    })
+                    .collect::<Vec<_>>()
+            } else {
+                vec![]
+            };
+
+            Component::ActionRow(ActionRow {
+                id: None,
+                components: vec![Component::SelectMenu(SelectMenu {
+                    id: None,
+                    channel_types: None,
+                    custom_id: format!("dqa:{session_id}:{}", q.index),
+                    default_values: None,
+                    disabled: false,
+                    kind: SelectMenuType::Text,
+                    max_values: Some(1),
+                    min_values: Some(1),
+                    options: Some(options),
+                    placeholder: Some(format!("{}. {}", q.index + 1, q.text)),
+                    required: None,
+                })],
+            })
+        })
+        .collect();
+
+    action_rows.push(Component::ActionRow(ActionRow {
+        id: None,
+        components: vec![Component::Button(Button {
+            id: None,
+            custom_id: Some(format!("dqc:{session_id}:{room_id}")),
+            disabled: false,
+            emoji: None,
+            label: Some(confirm_label),
+            style: ButtonStyle::Primary,
+            url: None,
+            sku_id: None,
+        })],
+    }));
+
+    InteractionResponse {
+        kind: InteractionResponseType::ChannelMessageWithSource,
+        data: Some(InteractionResponseData {
+            content: Some(prompt),
+            components: Some(action_rows),
+            flags: Some(MessageFlags::EPHEMERAL),
+            ..Default::default()
+        }),
+    }
+}
+
 pub async fn build_purpose_modal_for_room(
     state: &AppState,
     guild_id: Id<GuildMarker>,
@@ -89,10 +219,34 @@ pub async fn build_purpose_modal_for_room(
     session_id: i32,
     room_id: i32,
 ) -> BotResult<InteractionResponse> {
-    let questions = questions_for_room(state, guild_id, room_id).await?;
-    Ok(build_purpose_modal(
-        state, lang, session_id, room_id, &questions,
-    ))
+    let questions_with_inputs =
+        questions_with_inputs_for_room(state, guild_id, room_id).await?;
+    let dropdown_qs: Vec<&QuestionWithInput> = questions_with_inputs
+        .iter()
+        .filter(|q| matches!(q.input, QuestionInput::Dropdown(_)))
+        .collect();
+
+    if !dropdown_qs.is_empty() {
+        let existing = get_dropdown_answers(&state.rental_states, session_id);
+        Ok(build_dropdown_selection_message(
+            state,
+            lang,
+            session_id,
+            room_id,
+            &dropdown_qs,
+            &existing,
+        ))
+    } else {
+        let simple_questions: Vec<String> =
+            questions_with_inputs.iter().map(|q| q.text.clone()).collect();
+        Ok(build_purpose_modal(
+            state,
+            lang,
+            session_id,
+            room_id,
+            &simple_questions,
+        ))
+    }
 }
 
 fn answer_template(questions: &[String], answer_prefix: &str) -> String {
@@ -104,11 +258,11 @@ fn answer_template(questions: &[String], answer_prefix: &str) -> String {
         .join("\n\n")
 }
 
-async fn questions_for_room(
+pub(crate) async fn questions_with_inputs_for_room(
     state: &AppState,
     guild_id: Id<GuildMarker>,
     room_id: i32,
-) -> BotResult<Vec<String>> {
+) -> BotResult<Vec<QuestionWithInput>> {
     let room = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
             rooms::Entity::find_by_id(room_id)
@@ -129,7 +283,9 @@ async fn questions_for_room(
     })
     .await?;
 
-    Ok(preset.map(|preset| preset.questions()).unwrap_or_default())
+    Ok(preset
+        .map(|p| question_preset_facade::model_questions_with_inputs(&p))
+        .unwrap_or_default())
 }
 
 fn assigned_message(state: &AppState, lang: &str, room: &rooms::Model) -> String {
@@ -174,17 +330,34 @@ pub async fn start_rental(
             )
         });
         if existing.state == rental_sessions::STATE_AWAITING_PURPOSE && has_pending_state {
-            let questions = questions_for_room(&state, guild_id, existing.room_id).await?;
-            return Ok(StartRentalResult::AwaitingQuestions {
-                session_id: existing.id,
-                room_id: existing.room_id,
-                response: build_purpose_modal(
+            let questions_with_inputs =
+                questions_with_inputs_for_room(&state, guild_id, existing.room_id).await?;
+            let dropdown_qs: Vec<&QuestionWithInput> = questions_with_inputs
+                .iter()
+                .filter(|q| matches!(q.input, QuestionInput::Dropdown(_)))
+                .collect();
+
+            let response = if !dropdown_qs.is_empty() {
+                let existing_answers =
+                    get_dropdown_answers(&state.rental_states, existing.id);
+                build_dropdown_selection_message(
                     &state,
                     lang,
                     existing.id,
                     existing.room_id,
-                    &questions,
-                ),
+                    &dropdown_qs,
+                    &existing_answers,
+                )
+            } else {
+                let simple_questions: Vec<String> =
+                    questions_with_inputs.iter().map(|q| q.text.clone()).collect();
+                build_purpose_modal(&state, lang, existing.id, existing.room_id, &simple_questions)
+            };
+
+            return Ok(StartRentalResult::AwaitingQuestions {
+                session_id: existing.id,
+                room_id: existing.room_id,
+                response,
             });
         }
 
@@ -233,20 +406,22 @@ pub async fn start_rental(
     let vc_channel_for_key = voice_channel_id
         .or_else(|| room.voice_channel_id.map(|id| Id::new(id as u64)))
         .unwrap_or_else(|| Id::new(0));
-    let questions = questions_for_room(&state, guild_id, room_id).await?;
+    let questions_with_inputs =
+        questions_with_inputs_for_room(&state, guild_id, room_id).await?;
+    let has_questions = !questions_with_inputs.is_empty();
 
-    let session = if questions.is_empty() {
+    let session = if has_questions {
         with_guild_context(&state.db.guild, guild_id.get(), |txn| {
             Box::pin(async move {
-                rental_facade::create_active_session(txn, guild_id.get(), room_id, user_id.get())
-                    .await
+                rental_facade::create_session(txn, guild_id.get(), room_id, user_id.get()).await
             })
         })
         .await?
     } else {
         with_guild_context(&state.db.guild, guild_id.get(), |txn| {
             Box::pin(async move {
-                rental_facade::create_session(txn, guild_id.get(), room_id, user_id.get()).await
+                rental_facade::create_active_session(txn, guild_id.get(), room_id, user_id.get())
+                    .await
             })
         })
         .await?
@@ -258,7 +433,8 @@ pub async fn start_rental(
     .await?;
 
     let key = (guild_id.get(), vc_channel_for_key.get());
-    if questions.is_empty() {
+
+    if !has_questions {
         state.rental_states.insert(
             key,
             RentalStateEntry {
@@ -270,40 +446,60 @@ pub async fn start_rental(
             },
         );
 
-        Ok(StartRentalResult::Assigned {
+        return Ok(StartRentalResult::Assigned {
             session_id: session.id,
             room_id,
             message: assigned_message(&state, lang, &room),
-        })
-    } else {
-        let timeout = spawn_purpose_timeout(
-            state.clone(),
-            guild_id.get(),
-            vc_channel_for_key.get(),
-            session.id,
-            0,
-            Duration::from_secs(rental_facade::PURPOSE_TIMEOUT_MINUTES as u64 * 60),
-        );
-
-        state.rental_states.insert(
-            key,
-            RentalStateEntry {
-                state: RentalState::AwaitingPurpose {
-                    session_id: session.id,
-                    host_user_id: user_id.get(),
-                    timeout_task: timeout,
-                },
-                room_id,
-            },
-        );
-
-        let response = build_purpose_modal(&state, lang, session.id, room_id, &questions);
-        Ok(StartRentalResult::AwaitingQuestions {
-            session_id: session.id,
-            room_id,
-            response,
-        })
+        });
     }
+
+    let timeout = spawn_purpose_timeout(
+        state.clone(),
+        guild_id.get(),
+        vc_channel_for_key.get(),
+        session.id,
+        0,
+        Duration::from_secs(rental_facade::PURPOSE_TIMEOUT_MINUTES as u64 * 60),
+    );
+
+    state.rental_states.insert(
+        key,
+        RentalStateEntry {
+            state: RentalState::AwaitingPurpose {
+                session_id: session.id,
+                host_user_id: user_id.get(),
+                timeout_task: timeout,
+                dropdown_answers: vec![None; 10],
+            },
+            room_id,
+        },
+    );
+
+    let dropdown_qs: Vec<&QuestionWithInput> = questions_with_inputs
+        .iter()
+        .filter(|q| matches!(q.input, QuestionInput::Dropdown(_)))
+        .collect();
+
+    let response = if !dropdown_qs.is_empty() {
+        build_dropdown_selection_message(
+            &state,
+            lang,
+            session.id,
+            room_id,
+            &dropdown_qs,
+            &vec![None; 10],
+        )
+    } else {
+        let simple_questions: Vec<String> =
+            questions_with_inputs.iter().map(|q| q.text.clone()).collect();
+        build_purpose_modal(&state, lang, session.id, room_id, &simple_questions)
+    };
+
+    Ok(StartRentalResult::AwaitingQuestions {
+        session_id: session.id,
+        room_id,
+        response,
+    })
 }
 
 pub async fn submit_purpose(
@@ -360,6 +556,17 @@ pub async fn submit_purpose(
     }
 
     Ok(assigned_message(&state, lang, &room))
+}
+
+/// Assemble a structured purpose string from dropdown answers (in state) and text answers
+/// (from modal). Delegates to `question_preset_facade::assemble_purpose`.
+pub fn assemble_purpose_from_parts(
+    questions: &[QuestionWithInput],
+    dropdown_answers: &[Option<String>],
+    text_answers: &HashMap<usize, String>,
+    answer_prefix: &str,
+) -> String {
+    question_preset_facade::assemble_purpose(questions, dropdown_answers, text_answers, answer_prefix)
 }
 
 pub async fn release_rental(

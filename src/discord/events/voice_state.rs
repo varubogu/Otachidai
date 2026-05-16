@@ -14,6 +14,7 @@ use twilight_model::id::Id;
 
 enum LeaveAction {
     CancelPending,
+    ReleaseActive,
     StartHandoff { session_id: i32, room_id: i32 },
     Ignore,
 }
@@ -29,32 +30,64 @@ pub async fn handle(state: Arc<AppState>, event: Box<VoiceStateUpdate>) -> BotRe
         .and_then(|member| member.user.locale.as_deref())
         .map(ToOwned::to_owned);
 
+    let previous_vc = state
+        .voice_occupancy
+        .channel_for_user(guild_id.get(), user_id.get());
+
     match event.channel_id {
         Some(channel_id) => {
-            let previous_vc = find_user_current_vc(&state, user_id.get());
             if let Some(vc_id) = previous_vc
                 && vc_id != channel_id.get()
             {
+                state
+                    .voice_occupancy
+                    .remove_user(guild_id.get(), user_id.get(), vc_id);
+                let has_remaining_participants =
+                    state.voice_occupancy.has_users(guild_id.get(), vc_id);
                 handle_leave(
                     state.clone(),
                     guild_id,
                     user_id,
                     Id::new(vc_id),
+                    has_remaining_participants,
                     user_locale.as_deref(),
                 )
                 .await?;
             }
 
-            handle_join(state, guild_id, user_id, channel_id, user_locale.as_deref()).await
+            if previous_vc == Some(channel_id.get()) {
+                state
+                    .voice_occupancy
+                    .add_user(guild_id.get(), user_id.get(), channel_id.get());
+                return Ok(());
+            }
+
+            let was_empty = !state
+                .voice_occupancy
+                .has_users(guild_id.get(), channel_id.get());
+            state
+                .voice_occupancy
+                .add_user(guild_id.get(), user_id.get(), channel_id.get());
+
+            if was_empty {
+                handle_join(state, guild_id, user_id, channel_id, user_locale.as_deref()).await
+            } else {
+                Ok(())
+            }
         }
         None => {
-            let left_vc = find_user_current_vc(&state, user_id.get());
-            if let Some(vc_id) = left_vc {
+            if let Some(vc_id) = previous_vc {
+                state
+                    .voice_occupancy
+                    .remove_user(guild_id.get(), user_id.get(), vc_id);
+                let has_remaining_participants =
+                    state.voice_occupancy.has_users(guild_id.get(), vc_id);
                 handle_leave(
                     state,
                     guild_id,
                     user_id,
                     Id::new(vc_id),
+                    has_remaining_participants,
                     user_locale.as_deref(),
                 )
                 .await
@@ -139,6 +172,7 @@ async fn handle_leave(
     guild_id: twilight_model::id::Id<twilight_model::id::marker::GuildMarker>,
     user_id: twilight_model::id::Id<twilight_model::id::marker::UserMarker>,
     channel_id: twilight_model::id::Id<twilight_model::id::marker::ChannelMarker>,
+    has_remaining_participants: bool,
     discord_locale: Option<&str>,
 ) -> BotResult<()> {
     let key = state_key(guild_id, channel_id);
@@ -154,16 +188,22 @@ async fn handle_leave(
             RentalState::Active {
                 session_id,
                 host_user_id,
-            } if *host_user_id == user_id.get() => LeaveAction::StartHandoff {
-                session_id: *session_id,
-                room_id: entry.room_id,
-            },
+            } if *host_user_id == user_id.get() => {
+                if has_remaining_participants {
+                    LeaveAction::StartHandoff {
+                        session_id: *session_id,
+                        room_id: entry.room_id,
+                    }
+                } else {
+                    LeaveAction::ReleaseActive
+                }
+            }
             _ => LeaveAction::Ignore,
         }
     }; // dashmap Ref dropped here
 
     match action {
-        LeaveAction::CancelPending => {
+        LeaveAction::CancelPending | LeaveAction::ReleaseActive => {
             rental_flow::release_rental(state, guild_id, user_id, channel_id.get()).await?;
         }
         LeaveAction::StartHandoff {
@@ -180,22 +220,6 @@ async fn handle_leave(
 
     Ok(())
 }
-
-fn find_user_current_vc(state: &AppState, user_id: u64) -> Option<u64> {
-    for entry in state.rental_states.iter() {
-        match &entry.state {
-            RentalState::AwaitingPurpose { host_user_id, .. }
-            | RentalState::Active { host_user_id, .. }
-                if *host_user_id == user_id =>
-            {
-                return Some(entry.key().1);
-            }
-            _ => {}
-        }
-    }
-    None
-}
-
 fn prompt_channel_id(
     text_channel_id: Option<i64>,
     voice_channel_id: twilight_model::id::Id<twilight_model::id::marker::ChannelMarker>,

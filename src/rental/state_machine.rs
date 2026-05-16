@@ -12,6 +12,8 @@ pub enum RentalState {
         session_id: i32,
         host_user_id: u64,
         timeout_task: JoinHandle<()>,
+        /// Stores answers selected via dropdown menus, indexed 0-9 (matching question_N columns).
+        dropdown_answers: Vec<Option<String>>,
     },
     Active {
         session_id: i32,
@@ -57,4 +59,27 @@ impl RentalStateEntry {
 
 pub fn state_key(guild_id: Id<GuildMarker>, voice_channel_id: Id<ChannelMarker>) -> (u64, u64) {
     (guild_id.get(), voice_channel_id.get())
+}
+
+pub fn find_vc_for_session(states: &RentalStateMap, session_id: i32) -> u64 {
+    for entry in states.iter() {
+        if entry.session_id() == session_id {
+            return entry.key().1;
+        }
+    }
+    0
+}
+
+pub fn get_dropdown_answers(states: &RentalStateMap, session_id: i32) -> Vec<Option<String>> {
+    for entry in states.iter() {
+        if entry.session_id() == session_id {
+            if let RentalState::AwaitingPurpose {
+                dropdown_answers, ..
+            } = &entry.state
+            {
+                return dropdown_answers.clone();
+            }
+        }
+    }
+    vec![None; 10]
 }

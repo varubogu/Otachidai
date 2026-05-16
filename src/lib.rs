@@ -8,3 +8,4 @@ pub mod facade;
 pub mod i18n;
 pub mod language;
 pub mod rental;
+pub mod voice_occupancy;

@@ -4,6 +4,7 @@ use otachidai::{
     db::DbPools,
     i18n::I18n,
     rental::{state_machine::new_state_map, timeout::restore_pending_timeouts},
+    voice_occupancy::new_voice_occupancy_map,
 };
 use std::sync::Arc;
 use twilight_gateway::{
@@ -35,6 +36,7 @@ async fn main() -> anyhow::Result<()> {
     let i18n = Arc::new(I18n::load("locales")?);
 
     let rental_states = new_state_map();
+    let voice_occupancy = new_voice_occupancy_map();
 
     let state = Arc::new(AppState {
         db,
@@ -43,6 +45,7 @@ async fn main() -> anyhow::Result<()> {
         i18n,
         config_language: config.app_language.clone(),
         rental_states,
+        voice_occupancy,
     });
 
     // Restore any pending timeout tasks from DB

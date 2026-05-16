@@ -38,11 +38,17 @@ pub async fn handle(
             .get(lang, &MessageKey::AdminQuestionPresetAtLeastOne));
     }
 
+    let answers = (1..=10)
+        .map(|index| extract_optional_string(data, &format!("answer_{index}")))
+        .collect::<Vec<_>>();
+
     with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         let name = name.clone();
+        let questions = questions.clone();
+        let answers = answers.clone();
         Box::pin(async move {
             guild_settings::ensure_guild(txn, guild_id.get()).await?;
-            question_preset::upsert_preset(txn, guild_id.get(), name, questions)
+            question_preset::upsert_preset(txn, guild_id.get(), name, questions, answers)
                 .await
                 .map(|_| ())
         })

@@ -11,6 +11,7 @@ mod m20240001_000008_grant_permissions;
 mod m20240001_000009_enable_rls;
 mod m20240001_000010_default_language_ja;
 mod m20260505_000001_add_rental_question_presets;
+mod m20260516_000001_add_question_answers;
 
 pub struct Migrator;
 
@@ -29,6 +30,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20240001_000009_enable_rls::Migration),
             Box::new(m20240001_000010_default_language_ja::Migration),
             Box::new(m20260505_000001_add_rental_question_presets::Migration),
+            Box::new(m20260516_000001_add_question_answers::Migration),
         ]
     }
 }
