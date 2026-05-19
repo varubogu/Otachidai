@@ -2,10 +2,10 @@ use crate::app_state::AppState;
 use crate::db::rls::with_guild_context;
 use crate::entities::{rental_sessions, rooms};
 use crate::error::BotResult;
+use crate::facade::question_preset::{QuestionInput, QuestionWithInput};
 use crate::facade::{
     question_preset as question_preset_facade, rental as rental_facade, room as room_facade,
 };
-use crate::facade::question_preset::{QuestionInput, QuestionWithInput};
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
 use crate::rental::state_machine::{RentalState, RentalStateEntry, get_dropdown_answers};
@@ -219,8 +219,7 @@ pub async fn build_purpose_modal_for_room(
     session_id: i32,
     room_id: i32,
 ) -> BotResult<InteractionResponse> {
-    let questions_with_inputs =
-        questions_with_inputs_for_room(state, guild_id, room_id).await?;
+    let questions_with_inputs = questions_with_inputs_for_room(state, guild_id, room_id).await?;
     let dropdown_qs: Vec<&QuestionWithInput> = questions_with_inputs
         .iter()
         .filter(|q| matches!(q.input, QuestionInput::Dropdown(_)))
@@ -237,8 +236,10 @@ pub async fn build_purpose_modal_for_room(
             &existing,
         ))
     } else {
-        let simple_questions: Vec<String> =
-            questions_with_inputs.iter().map(|q| q.text.clone()).collect();
+        let simple_questions: Vec<String> = questions_with_inputs
+            .iter()
+            .map(|q| q.text.clone())
+            .collect();
         Ok(build_purpose_modal(
             state,
             lang,
@@ -338,8 +339,7 @@ pub async fn start_rental(
                 .collect();
 
             let response = if !dropdown_qs.is_empty() {
-                let existing_answers =
-                    get_dropdown_answers(&state.rental_states, existing.id);
+                let existing_answers = get_dropdown_answers(&state.rental_states, existing.id);
                 build_dropdown_selection_message(
                     &state,
                     lang,
@@ -349,9 +349,17 @@ pub async fn start_rental(
                     &existing_answers,
                 )
             } else {
-                let simple_questions: Vec<String> =
-                    questions_with_inputs.iter().map(|q| q.text.clone()).collect();
-                build_purpose_modal(&state, lang, existing.id, existing.room_id, &simple_questions)
+                let simple_questions: Vec<String> = questions_with_inputs
+                    .iter()
+                    .map(|q| q.text.clone())
+                    .collect();
+                build_purpose_modal(
+                    &state,
+                    lang,
+                    existing.id,
+                    existing.room_id,
+                    &simple_questions,
+                )
             };
 
             return Ok(StartRentalResult::AwaitingQuestions {
@@ -406,8 +414,7 @@ pub async fn start_rental(
     let vc_channel_for_key = voice_channel_id
         .or_else(|| room.voice_channel_id.map(|id| Id::new(id as u64)))
         .unwrap_or_else(|| Id::new(0));
-    let questions_with_inputs =
-        questions_with_inputs_for_room(&state, guild_id, room_id).await?;
+    let questions_with_inputs = questions_with_inputs_for_room(&state, guild_id, room_id).await?;
     let has_questions = !questions_with_inputs.is_empty();
 
     let session = if has_questions {
@@ -490,8 +497,10 @@ pub async fn start_rental(
             &vec![None; 10],
         )
     } else {
-        let simple_questions: Vec<String> =
-            questions_with_inputs.iter().map(|q| q.text.clone()).collect();
+        let simple_questions: Vec<String> = questions_with_inputs
+            .iter()
+            .map(|q| q.text.clone())
+            .collect();
         build_purpose_modal(&state, lang, session.id, room_id, &simple_questions)
     };
 
@@ -582,7 +591,12 @@ pub fn assemble_purpose_from_parts(
     text_answers: &HashMap<usize, String>,
     answer_prefix: &str,
 ) -> String {
-    question_preset_facade::assemble_purpose(questions, dropdown_answers, text_answers, answer_prefix)
+    question_preset_facade::assemble_purpose(
+        questions,
+        dropdown_answers,
+        text_answers,
+        answer_prefix,
+    )
 }
 
 pub async fn release_rental(

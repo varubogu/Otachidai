@@ -36,25 +36,85 @@ pub async fn register_global_commands(
         )
         .option(StringBuilder::new("name", "Preset name").required(true))
         .option(StringBuilder::new("question_1", "Question 1").required(false))
-        .option(StringBuilder::new("answer_1", "Answer options for Q1 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_1",
+                "Answer options for Q1 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_2", "Question 2").required(false))
-        .option(StringBuilder::new("answer_2", "Answer options for Q2 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_2",
+                "Answer options for Q2 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_3", "Question 3").required(false))
-        .option(StringBuilder::new("answer_3", "Answer options for Q3 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_3",
+                "Answer options for Q3 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_4", "Question 4").required(false))
-        .option(StringBuilder::new("answer_4", "Answer options for Q4 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_4",
+                "Answer options for Q4 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_5", "Question 5").required(false))
-        .option(StringBuilder::new("answer_5", "Answer options for Q5 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_5",
+                "Answer options for Q5 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_6", "Question 6").required(false))
-        .option(StringBuilder::new("answer_6", "Answer options for Q6 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_6",
+                "Answer options for Q6 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_7", "Question 7").required(false))
-        .option(StringBuilder::new("answer_7", "Answer options for Q7 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_7",
+                "Answer options for Q7 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_8", "Question 8").required(false))
-        .option(StringBuilder::new("answer_8", "Answer options for Q8 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_8",
+                "Answer options for Q8 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_9", "Question 9").required(false))
-        .option(StringBuilder::new("answer_9", "Answer options for Q9 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_9",
+                "Answer options for Q9 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .option(StringBuilder::new("question_10", "Question 10").required(false))
-        .option(StringBuilder::new("answer_10", "Answer options for Q10 (comma-separated; use ,, for a literal comma)").required(false))
+        .option(
+            StringBuilder::new(
+                "answer_10",
+                "Answer options for Q10 (comma-separated; use ,, for a literal comma)",
+            )
+            .required(false),
+        )
         .build(),
         CommandBuilder::new(
             "register_room",

@@ -42,7 +42,9 @@ pub fn parse_answer_options(raw: &str) -> Vec<String> {
     result
 }
 
-pub fn model_questions_with_inputs(model: &rental_question_presets::Model) -> Vec<QuestionWithInput> {
+pub fn model_questions_with_inputs(
+    model: &rental_question_presets::Model,
+) -> Vec<QuestionWithInput> {
     let questions: [Option<&str>; 10] = [
         model.question_1.as_deref(),
         model.question_2.as_deref(),
@@ -252,10 +254,7 @@ mod tests {
 
     #[test]
     fn parse_answer_options_escaped_comma() {
-        assert_eq!(
-            parse_answer_options("abc,def,,ghi"),
-            vec!["abc", "def,ghi"]
-        );
+        assert_eq!(parse_answer_options("abc,def,,ghi"), vec!["abc", "def,ghi"]);
     }
 
     #[test]
@@ -275,9 +274,6 @@ mod tests {
 
     #[test]
     fn parse_answer_options_trims_whitespace() {
-        assert_eq!(
-            parse_answer_options(" a , b , c "),
-            vec!["a", "b", "c"]
-        );
+        assert_eq!(parse_answer_options(" a , b , c "), vec!["a", "b", "c"]);
     }
 }

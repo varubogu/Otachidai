@@ -3,14 +3,13 @@ use crate::error::BotResult;
 use crate::facade::question_preset::QuestionInput;
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
-use crate::rental::{flow as rental_flow, handoff, state_machine::RentalState};
 use crate::rental::state_machine::{find_vc_for_session, get_dropdown_answers};
+use crate::rental::{flow as rental_flow, handoff, state_machine::RentalState};
 use std::collections::HashMap;
 use std::sync::Arc;
 use twilight_model::{
     application::interaction::{
-        Interaction, InteractionData, InteractionType,
-        modal::ModalInteractionComponent,
+        Interaction, InteractionData, InteractionType, modal::ModalInteractionComponent,
     },
     channel::message::MessageFlags,
     gateway::payload::incoming::InteractionCreate,
@@ -329,7 +328,9 @@ async fn handle_component(
                 }
             } else {
                 // Show modal for text questions.
-                rental_flow::build_text_questions_modal(&state, &lang, session_id, room_id, &text_qs)
+                rental_flow::build_text_questions_modal(
+                    &state, &lang, session_id, room_id, &text_qs,
+                )
             };
 
             state
@@ -412,9 +413,7 @@ async fn handle_modal(
             let vc_id = find_vc_for_session(&state.rental_states, session_id);
 
             // Detect modal style: old (single purpose_text) vs new (per-question qt_{index})
-            let purpose = if let Some(text) =
-                find_in_components(&data.components, "purpose_text")
-            {
+            let purpose = if let Some(text) = find_in_components(&data.components, "purpose_text") {
                 // Old-style: free-form text template
                 text
             } else {
