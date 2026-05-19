@@ -12,6 +12,7 @@ bot-rental-already-renting = You already have an active rental.
 bot-rental-room-occupied = That room is currently occupied.
 bot-rental-dropdown-prompt = Please answer the following questions, then click Confirm.
 bot-rental-dropdown-confirm = Confirm
+bot-rental-expired = Your rental request has expired. Please start a new request.
 
 ## Handoff
 bot-handoff-prompt = The room host has left. Would you like to take over?

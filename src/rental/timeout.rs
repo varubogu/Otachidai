@@ -186,16 +186,36 @@ async fn restore_fire(
     session_id: i32,
     task_id: i32,
 ) -> crate::error::BotResult<()> {
-    let room_id = with_guild_context(&state.db.guild, guild_id, |txn| {
-        Box::pin(async move { get_room_id_for_session(txn, session_id).await })
+    use crate::entities::rental_sessions;
+
+    let session = with_guild_context(&state.db.guild, guild_id, |txn| {
+        Box::pin(async move {
+            rental_sessions::Entity::find_by_id(session_id)
+                .one(txn)
+                .await
+                .map_err(crate::error::BotError::from)
+        })
     })
     .await?;
 
+    // The session may have advanced past AwaitingPurpose since this task was
+    // scheduled (e.g. the user submitted their purpose). Only release sessions
+    // still awaiting a purpose; otherwise just retire the stale scheduled task.
+    let still_awaiting = session
+        .as_ref()
+        .map(|s| s.state == rental_sessions::STATE_AWAITING_PURPOSE)
+        .unwrap_or(false);
+    let room_id = session.as_ref().map(|s| s.room_id);
+
     with_guild_context(&state.db.guild, guild_id, |txn| {
         Box::pin(async move {
-            rental_facade::release_session(txn, session_id).await?;
-            rental_facade::mark_task_processed(txn, task_id).await?;
-            crate::facade::room::set_room_availability(txn, room_id, true).await
+            if still_awaiting {
+                rental_facade::release_session(txn, session_id).await?;
+                if let Some(room_id) = room_id {
+                    crate::facade::room::set_room_availability(txn, room_id, true).await?;
+                }
+            }
+            rental_facade::mark_task_processed(txn, task_id).await
         })
     })
     .await

@@ -512,6 +512,21 @@ pub async fn submit_purpose(
     lang: &str,
 ) -> BotResult<String> {
     let key = (guild_id.get(), voice_channel_id);
+
+    // Guard against resurrecting an expired session: if the in-memory AwaitingPurpose
+    // entry is gone (purpose timeout fired, or the user left the VC and the rental was
+    // released), a late modal submit must NOT write the session back to Active.
+    let is_pending = match state.rental_states.get(&key) {
+        Some(entry) => matches!(
+            &entry.state,
+            RentalState::AwaitingPurpose { session_id: sid, .. } if *sid == session_id
+        ),
+        None => false,
+    };
+    if !is_pending {
+        return Ok(state.i18n.get(lang, &MessageKey::BotRentalExpired));
+    }
+
     if let Some(entry) = state.rental_states.get(&key) {
         entry.abort_timeout();
     }
@@ -520,6 +535,7 @@ pub async fn submit_purpose(
         let purpose_clone = purpose.clone();
         Box::pin(async move {
             rental_facade::set_purpose(txn, session_id, purpose_clone).await?;
+            rental_facade::mark_session_tasks_processed(txn, session_id).await?;
             Ok(())
         })
     })

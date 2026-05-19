@@ -12,6 +12,7 @@ bot-rental-already-renting = すでにアクティブなレンタルがありま
 bot-rental-room-occupied = その部屋は現在使用中です。
 bot-rental-dropdown-prompt = 以下の質問に回答し、「確認」ボタンを押してください。
 bot-rental-dropdown-confirm = 確認
+bot-rental-expired = レンタル申請の有効期限が切れました。もう一度申請してください。
 
 ## 引き継ぎ
 bot-handoff-prompt = 部屋のホストが退出しました。引き継ぎますか？

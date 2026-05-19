@@ -15,7 +15,7 @@ pub async fn handle_ready(state: Arc<AppState>, ready: Ready) -> BotResult<()> {
 }
 
 pub async fn handle_guild_create(state: Arc<AppState>, guild: Box<GuildCreate>) -> BotResult<()> {
-    let guild_id = match guild.as_ref() {
+    let (guild_id, available) = match guild.as_ref() {
         GuildCreate::Available(g) => {
             state.voice_occupancy.clear_guild(g.id.get());
             for voice_state in &g.voice_states {
@@ -27,10 +27,16 @@ pub async fn handle_guild_create(state: Arc<AppState>, guild: Box<GuildCreate>) 
                     );
                 }
             }
-            g.id
+            (g.id, true)
         }
-        GuildCreate::Unavailable(g) => g.id,
+        GuildCreate::Unavailable(g) => (g.id, false),
     };
     tracing::debug!(%guild_id, "Joined guild");
+
+    // Voice occupancy is now populated; reconcile persisted rentals against it
+    // so rentals orphaned by a restart get released or handed off correctly.
+    if available && let Err(e) = crate::rental::reconcile::reconcile_guild(&state, guild_id).await {
+        tracing::error!(%guild_id, "Rental reconciliation failed: {e}");
+    }
     Ok(())
 }

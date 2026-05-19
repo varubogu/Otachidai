@@ -1,5 +1,6 @@
 pub mod flow;
 pub mod handoff;
+pub mod reconcile;
 pub mod state_machine;
 pub mod timeout;
 

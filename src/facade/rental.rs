@@ -1,4 +1,6 @@
-use crate::entities::rental_sessions::{self, STATE_ACTIVE, STATE_PENDING_HANDOFF, STATE_RELEASED};
+use crate::entities::rental_sessions::{
+    self, STATE_ACTIVE, STATE_AWAITING_PURPOSE, STATE_PENDING_HANDOFF, STATE_RELEASED,
+};
 use crate::entities::scheduled_tasks::{self, TASK_TYPE_TIMEOUT_NOTIFICATION};
 use crate::error::{BotError, BotResult};
 use chrono::{Duration, Utc};
@@ -153,6 +155,40 @@ pub async fn find_active_session_for_user<C: ConnectionTrait>(
         .one(db)
         .await
         .map_err(BotError::from)
+}
+
+pub async fn find_active_sessions_by_guild<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+) -> BotResult<Vec<rental_sessions::Model>> {
+    rental_sessions::Entity::find()
+        .filter(rental_sessions::Column::GuildId.eq(guild_id as i64))
+        .filter(rental_sessions::Column::State.is_in([
+            STATE_AWAITING_PURPOSE,
+            STATE_ACTIVE,
+            STATE_PENDING_HANDOFF,
+        ]))
+        .all(db)
+        .await
+        .map_err(BotError::from)
+}
+
+/// Mark all unprocessed scheduled tasks for a rental session as processed.
+pub async fn mark_session_tasks_processed<C: ConnectionTrait>(
+    db: &C,
+    session_id: i32,
+) -> BotResult<()> {
+    let tasks = scheduled_tasks::Entity::find()
+        .filter(scheduled_tasks::Column::RentalSessionId.eq(session_id))
+        .filter(scheduled_tasks::Column::Processed.eq(false))
+        .all(db)
+        .await?;
+    for task in tasks {
+        let mut model: scheduled_tasks::ActiveModel = task.into();
+        model.processed = Set(true);
+        model.update(db).await?;
+    }
+    Ok(())
 }
 
 pub async fn mark_task_processed<C: ConnectionTrait>(db: &C, task_id: i32) -> BotResult<()> {
