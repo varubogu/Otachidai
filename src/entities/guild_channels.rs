@@ -9,6 +9,7 @@ pub struct Model {
     pub guild_id: i64,
     pub channel_id: i64,
     pub channel_type: i16,
+    pub message_id: Option<i64>,
     pub created_at: DateTimeWithTimeZone,
 }
 

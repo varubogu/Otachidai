@@ -69,6 +69,15 @@ pub async fn find_available_room<C: ConnectionTrait>(
     Ok(None)
 }
 
+pub async fn list_rooms<C: ConnectionTrait>(db: &C, guild_id: u64) -> BotResult<Vec<rooms::Model>> {
+    rooms::Entity::find()
+        .filter(rooms::Column::GuildId.eq(guild_id as i64))
+        .order_by_asc(rooms::Column::Id)
+        .all(db)
+        .await
+        .map_err(BotError::from)
+}
+
 pub async fn find_room_by_voice_channel<C: ConnectionTrait>(
     db: &C,
     guild_id: u64,

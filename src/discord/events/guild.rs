@@ -18,6 +18,7 @@ pub async fn handle_guild_create(state: Arc<AppState>, guild: Box<GuildCreate>) 
     let (guild_id, available) = match guild.as_ref() {
         GuildCreate::Available(g) => {
             state.voice_occupancy.clear_guild(g.id.get());
+            let mut tracked = 0usize;
             for voice_state in &g.voice_states {
                 if let Some(channel_id) = voice_state.channel_id {
                     state.voice_occupancy.add_user(
@@ -25,13 +26,18 @@ pub async fn handle_guild_create(state: Arc<AppState>, guild: Box<GuildCreate>) 
                         voice_state.user_id.get(),
                         channel_id.get(),
                     );
+                    tracked += 1;
                 }
             }
+            tracing::info!(
+                guild_id = %g.id,
+                voice_members = tracked,
+                "GuildCreate received; voice occupancy populated"
+            );
             (g.id, true)
         }
         GuildCreate::Unavailable(g) => (g.id, false),
     };
-    tracing::debug!(%guild_id, "Joined guild");
 
     // Voice occupancy is now populated; reconcile persisted rentals against it
     // so rentals orphaned by a restart get released or handed off correctly.

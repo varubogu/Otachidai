@@ -31,7 +31,9 @@ pub async fn handle(
 
     with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
-            guild_settings::set_rental_button_channel(txn, guild_id.get(), channel_id).await
+            guild_settings::set_rental_button_channel(txn, guild_id.get(), channel_id).await?;
+            // Drop any stale status-board message id from a previous registration.
+            guild_settings::set_rental_button_message_id(txn, guild_id.get(), None).await
         })
     })
     .await?;
@@ -44,6 +46,12 @@ pub async fn handle(
         .create_message(Id::<ChannelMarker>::new(channel_id))
         .components(&components)
         .await?;
+
+    // Post the rental-status board directly below the button. Best-effort: a
+    // failure here must not fail the registration itself.
+    if let Err(e) = crate::rental::status::refresh(&state, guild_id.get()).await {
+        tracing::warn!("Failed to post initial rental status board: {e}");
+    }
 
     let mut args = FluentArgs::new();
     args.set("channel", format!("<#{channel_id}>"));

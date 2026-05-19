@@ -34,6 +34,14 @@ pub async fn handle(state: Arc<AppState>, event: Box<VoiceStateUpdate>) -> BotRe
         .voice_occupancy
         .channel_for_user(guild_id.get(), user_id.get());
 
+    tracing::info!(
+        %guild_id,
+        %user_id,
+        channel_id = ?event.channel_id.map(|c| c.get()),
+        previous_vc = ?previous_vc,
+        "VoiceStateUpdate received"
+    );
+
     match event.channel_id {
         Some(channel_id) => {
             if let Some(vc_id) = previous_vc
@@ -70,8 +78,10 @@ pub async fn handle(state: Arc<AppState>, event: Box<VoiceStateUpdate>) -> BotRe
                 .add_user(guild_id.get(), user_id.get(), channel_id.get());
 
             if was_empty {
+                tracing::info!(%guild_id, %user_id, %channel_id, "User joined an empty voice channel; checking for rental room");
                 handle_join(state, guild_id, user_id, channel_id, user_locale.as_deref()).await
             } else {
+                tracing::info!(%guild_id, %user_id, %channel_id, "User joined a non-empty voice channel; not a new rental trigger");
                 Ok(())
             }
         }
@@ -112,10 +122,14 @@ async fn handle_join(
     })
     .await?;
 
-    let Some(room) = room else { return Ok(()) };
+    let Some(room) = room else {
+        tracing::info!(%guild_id, %channel_id, "Voice channel is not a registered rental room; ignoring join");
+        return Ok(());
+    };
 
     let key = state_key(guild_id, channel_id);
     if state.rental_states.contains_key(&key) {
+        tracing::info!(%guild_id, %channel_id, "Rental already tracked for this VC; ignoring join");
         return Ok(());
     }
 
@@ -176,9 +190,11 @@ async fn handle_leave(
     discord_locale: Option<&str>,
 ) -> BotResult<()> {
     let key = state_key(guild_id, channel_id);
+    tracing::info!(%guild_id, %user_id, %channel_id, has_remaining_participants, "Handling voice channel leave");
     let action = {
         let entry = state.rental_states.get(&key);
         let Some(ref entry) = entry else {
+            tracing::info!(%guild_id, %channel_id, "No rental state tracked for this VC; nothing to release");
             return Ok(());
         };
         match &entry.state {
@@ -204,18 +220,22 @@ async fn handle_leave(
 
     match action {
         LeaveAction::CancelPending | LeaveAction::ReleaseActive => {
+            tracing::info!(%guild_id, %user_id, %channel_id, "Rental host left; releasing rental");
             rental_flow::release_rental(state, guild_id, user_id, channel_id.get()).await?;
         }
         LeaveAction::StartHandoff {
             session_id,
             room_id,
         } => {
+            tracing::info!(%guild_id, %user_id, %channel_id, session_id, "Rental host left with participants remaining; starting handoff");
             let lang = resolve_language(&state, guild_id, discord_locale).await;
 
             handoff::initiate_handoff(state, guild_id, channel_id, session_id, room_id, &lang)
                 .await?;
         }
-        LeaveAction::Ignore => {}
+        LeaveAction::Ignore => {
+            tracing::info!(%guild_id, %user_id, %channel_id, "Voice leave does not affect the tracked rental; ignoring");
+        }
     }
 
     Ok(())

@@ -74,6 +74,8 @@ pub async fn initiate_handoff(
         },
     );
 
+    crate::rental::status::trigger(&state, guild_id.get());
+
     Ok(())
 }
 
@@ -132,6 +134,8 @@ pub async fn accept_handoff(
             room_id,
         },
     );
+
+    crate::rental::status::trigger(&state, guild_id.get());
 
     Ok(())
 }

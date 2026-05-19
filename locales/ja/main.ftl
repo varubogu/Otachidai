@@ -20,6 +20,15 @@ bot-handoff-accepted = { $user } が新しいホストになりました。
 bot-handoff-timeout = 誰も引き継ぎませんでした。部屋を解放しました。
 bot-handoff-take-over = 引き継ぐ
 
+## レンタル状況ボード
+status-title = レンタル状況
+status-available = 空き
+status-awaiting = 受付中
+status-in-use = 利用中
+status-pending-handoff = 引き継ぎ待ち
+status-summary = 空き { $free } / 利用中 { $used }
+status-no-rooms = まだ部屋が登録されていません。
+
 ## 管理者コマンド
 admin-report-channel-registered = レポートチャンネルを登録しました: { $channel }
 admin-rental-button-registered = レンタルボタンチャンネルを登録しました。{ $channel } にボタンを投稿しました。

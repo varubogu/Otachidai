@@ -30,6 +30,7 @@ pub fn spawn_purpose_timeout(
         {
             tracing::error!("Purpose timeout error: {e}");
         }
+        crate::rental::status::trigger(&state, guild_id);
     })
 }
 
@@ -111,6 +112,7 @@ pub fn spawn_handoff_timeout(
         {
             tracing::error!("Handoff timeout error: {e}");
         }
+        crate::rental::status::trigger(&state, guild_id);
     })
 }
 
@@ -175,6 +177,7 @@ pub async fn restore_pending_timeouts(state: Arc<AppState>) {
                 if let Err(e) = restore_fire(&state_clone, guild_id, session_id, task_id).await {
                     tracing::error!("Restored timeout error: {e}");
                 }
+                crate::rental::status::trigger(&state_clone, guild_id);
             });
         }
     }

@@ -20,6 +20,15 @@ bot-handoff-accepted = { $user } is now the new room host.
 bot-handoff-timeout = No one took over. The room has been released.
 bot-handoff-take-over = Take Over
 
+## Rental status board
+status-title = Rental Status
+status-available = Available
+status-awaiting = Awaiting purpose
+status-in-use = In use
+status-pending-handoff = Awaiting handoff
+status-summary = Available { $free } / In use { $used }
+status-no-rooms = No rooms are registered yet.
+
 ## Admin commands
 admin-report-channel-registered = Report channel registered: { $channel }
 admin-rental-button-registered = Rental button channel registered. Button posted in { $channel }.

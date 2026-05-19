@@ -77,6 +77,36 @@ pub async fn get_rental_button_channel<C: ConnectionTrait>(
     get_channel(db, guild_id, CHANNEL_TYPE_RENTAL_BUTTON).await
 }
 
+pub async fn get_rental_button_channel_row<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+) -> BotResult<Option<guild_channels::Model>> {
+    guild_channels::Entity::find()
+        .filter(guild_channels::Column::GuildId.eq(guild_id as i64))
+        .filter(guild_channels::Column::ChannelType.eq(CHANNEL_TYPE_RENTAL_BUTTON))
+        .one(db)
+        .await
+        .map_err(BotError::from)
+}
+
+pub async fn set_rental_button_message_id<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+    message_id: Option<u64>,
+) -> BotResult<()> {
+    let existing = guild_channels::Entity::find()
+        .filter(guild_channels::Column::GuildId.eq(guild_id as i64))
+        .filter(guild_channels::Column::ChannelType.eq(CHANNEL_TYPE_RENTAL_BUTTON))
+        .one(db)
+        .await?;
+    if let Some(existing) = existing {
+        let mut model: guild_channels::ActiveModel = existing.into();
+        model.message_id = Set(message_id.map(|id| id as i64));
+        model.update(db).await?;
+    }
+    Ok(())
+}
+
 async fn get_channel<C: ConnectionTrait>(
     db: &C,
     guild_id: u64,

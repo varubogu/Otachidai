@@ -439,6 +439,8 @@ pub async fn start_rental(
     })
     .await?;
 
+    crate::rental::status::trigger(&state, guild_id.get());
+
     let key = (guild_id.get(), vc_channel_for_key.get());
 
     if !has_questions {
@@ -580,6 +582,8 @@ pub async fn submit_purpose(
         };
     }
 
+    crate::rental::status::trigger(&state, guild_id.get());
+
     Ok(assigned_message(&state, lang, &room))
 }
 
@@ -626,5 +630,8 @@ pub async fn release_rental(
     .await?;
 
     state.rental_states.remove(&key);
+
+    crate::rental::status::trigger(&state, guild_id.get());
+
     Ok(state.i18n.get(&lang, &MessageKey::BotRentalReleased))
 }

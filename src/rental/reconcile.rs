@@ -21,17 +21,18 @@ pub async fn reconcile_guild(state: &Arc<AppState>, guild_id: Id<GuildMarker>) -
     })
     .await?;
 
-    if sessions.is_empty() {
-        return Ok(());
-    }
-
-    let lang = resolve_language(state, guild_id, None).await;
-
-    for session in sessions {
-        if let Err(e) = reconcile_session(state, guild_id, &session, &lang).await {
-            tracing::error!(session_id = session.id, "Failed to reconcile rental: {e}");
+    if !sessions.is_empty() {
+        let lang = resolve_language(state, guild_id, None).await;
+        for session in sessions {
+            if let Err(e) = reconcile_session(state, guild_id, &session, &lang).await {
+                tracing::error!(session_id = session.id, "Failed to reconcile rental: {e}");
+            }
         }
     }
+
+    // Refresh the status board so it reflects current state after a restart.
+    crate::rental::status::trigger(state, guild_id.get());
+
     Ok(())
 }
 
