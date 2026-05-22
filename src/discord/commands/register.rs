@@ -124,7 +124,8 @@ pub async fn register_global_commands(
         .option(ChannelBuilder::new("text_channel", "Text channel for this room").required(false))
         .option(ChannelBuilder::new("voice_channel", "Voice channel for this room").required(false))
         .option(
-            StringBuilder::new("question_preset", "Question preset name for this room")
+            StringBuilder::new("question_preset", "Question preset for this room")
+                .autocomplete(true)
                 .required(false),
         )
         .option(StringBuilder::new("group", "Group name this room belongs to").required(false))

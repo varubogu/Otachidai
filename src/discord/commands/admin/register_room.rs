@@ -18,7 +18,7 @@ pub async fn handle(
 ) -> BotResult<String> {
     let text_channel_id = extract_optional_channel(data, "text_channel");
     let voice_channel_id = extract_optional_channel(data, "voice_channel");
-    let question_preset_name = extract_optional_string(data, "question_preset")
+    let question_preset_ref = extract_optional_string(data, "question_preset")
         .and_then(|name| question_preset::normalize_optional_text(&name));
     let group_name = extract_optional_string(data, "group")
         .map(|s| s.trim().to_string())
@@ -30,12 +30,12 @@ pub async fn handle(
 
     let (question_preset_id, group_id) =
         with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-            let question_preset_name = question_preset_name.clone();
+            let question_preset_ref = question_preset_ref.clone();
             let group_name = group_name.clone();
             Box::pin(async move {
                 guild_settings::ensure_guild(txn, guild_id.get()).await?;
-                let question_preset_id = if let Some(name) = question_preset_name {
-                    question_preset::find_by_name(txn, guild_id.get(), &name)
+                let question_preset_id = if let Some(reference) = question_preset_ref {
+                    question_preset::find_by_ref(txn, guild_id.get(), &reference)
                         .await?
                         .map(|preset| preset.id)
                 } else {
@@ -53,7 +53,7 @@ pub async fn handle(
         })
         .await?;
 
-    if question_preset_name.is_some() && question_preset_id.is_none() {
+    if question_preset_ref.is_some() && question_preset_id.is_none() {
         return Ok(state
             .i18n
             .get(lang, &MessageKey::AdminQuestionPresetNotFound));

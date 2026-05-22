@@ -1,6 +1,7 @@
 use crate::app_state::AppState;
+use crate::db::rls::with_guild_context;
 use crate::error::BotResult;
-use crate::facade::question_preset::QuestionInput;
+use crate::facade::question_preset::{self, QuestionInput};
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
 use crate::rental::state_machine::{find_vc_for_session, get_dropdown_answers};
@@ -8,8 +9,10 @@ use crate::rental::{flow as rental_flow, handoff, state_machine::RentalState};
 use std::collections::HashMap;
 use std::sync::Arc;
 use twilight_model::{
+    application::command::{CommandOptionChoice, CommandOptionChoiceValue},
     application::interaction::{
-        Interaction, InteractionData, InteractionType, modal::ModalInteractionComponent,
+        Interaction, InteractionData, InteractionType, application_command::CommandOptionValue,
+        modal::ModalInteractionComponent,
     },
     channel::message::MessageFlags,
     gateway::payload::incoming::InteractionCreate,
@@ -29,6 +32,9 @@ pub async fn handle(state: Arc<AppState>, event: InteractionCreate) -> BotResult
 
     match interaction.kind {
         InteractionType::ApplicationCommand => handle_command(state, guild_id, interaction).await,
+        InteractionType::ApplicationCommandAutocomplete => {
+            handle_autocomplete(state, guild_id, interaction).await
+        }
         InteractionType::MessageComponent => handle_component(state, guild_id, interaction).await,
         InteractionType::ModalSubmit => handle_modal(state, guild_id, interaction).await,
         _ => Ok(()),
@@ -208,6 +214,86 @@ async fn handle_command(
         .create_response(interaction.id, &interaction.token, &response)
         .await?;
     Ok(())
+}
+
+async fn handle_autocomplete(
+    state: Arc<AppState>,
+    guild_id: Id<GuildMarker>,
+    interaction: Interaction,
+) -> BotResult<()> {
+    let Some(InteractionData::ApplicationCommand(ref data)) = interaction.data else {
+        return Ok(());
+    };
+
+    // Locate the option the user is currently typing into.
+    let focused = data.options.iter().find_map(|o| match &o.value {
+        CommandOptionValue::Focused(value, _) => Some((o.name.as_str(), value.as_str())),
+        _ => None,
+    });
+
+    let choices = match (data.name.as_str(), focused) {
+        ("register_room", Some(("question_preset", current))) => {
+            question_preset_choices(&state, guild_id, current).await
+        }
+        _ => Vec::new(),
+    };
+
+    let response = InteractionResponse {
+        kind: InteractionResponseType::ApplicationCommandAutocompleteResult,
+        data: Some(InteractionResponseData {
+            choices: Some(choices),
+            ..Default::default()
+        }),
+    };
+
+    state
+        .http
+        .interaction(state.application_id)
+        .create_response(interaction.id, &interaction.token, &response)
+        .await?;
+    Ok(())
+}
+
+/// Build `"id:name"` suggestions for the guild's question presets, filtered by what the
+/// user has typed so far. Discord caps autocomplete at 25 choices and 100-char names.
+async fn question_preset_choices(
+    state: &AppState,
+    guild_id: Id<GuildMarker>,
+    current: &str,
+) -> Vec<CommandOptionChoice> {
+    let presets = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+        Box::pin(async move { question_preset::list_by_guild(txn, guild_id.get()).await })
+    })
+    .await
+    .unwrap_or_else(|e| {
+        tracing::error!("{e}");
+        Vec::new()
+    });
+
+    let needle = current.trim().to_lowercase();
+    presets
+        .into_iter()
+        .filter(|preset| {
+            needle.is_empty()
+                || question_preset::format_ref_label(preset)
+                    .to_lowercase()
+                    .contains(&needle)
+        })
+        .take(25)
+        .map(|preset| {
+            // Discord caps the choice name/value at 100 characters; truncate on a char
+            // boundary so multi-byte (e.g. Japanese) names don't panic.
+            let label: String = question_preset::format_ref_label(&preset)
+                .chars()
+                .take(100)
+                .collect();
+            CommandOptionChoice {
+                name: label.clone(),
+                name_localizations: None,
+                value: CommandOptionChoiceValue::String(label),
+            }
+        })
+        .collect()
 }
 
 async fn handle_component(

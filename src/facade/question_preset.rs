@@ -1,6 +1,8 @@
 use crate::entities::rental_question_presets;
 use crate::error::{BotError, BotResult};
-use sea_orm::{ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, Set,
+};
 
 pub struct QuestionWithInput {
     pub index: usize,
@@ -220,6 +222,44 @@ pub async fn find_by_id<C: ConnectionTrait>(
         .one(db)
         .await
         .map_err(BotError::from)
+}
+
+/// List every preset for a guild, ordered by id (used for autocomplete suggestions).
+pub async fn list_by_guild<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+) -> BotResult<Vec<rental_question_presets::Model>> {
+    rental_question_presets::Entity::find()
+        .filter(rental_question_presets::Column::GuildId.eq(guild_id as i64))
+        .order_by_asc(rental_question_presets::Column::Id)
+        .all(db)
+        .await
+        .map_err(BotError::from)
+}
+
+/// Resolve a preset reference accepted from a command option.
+///
+/// Suggestions are surfaced as `"id:name"`, so the submitted value is parsed by its
+/// leading numeric id first; if that does not resolve to a preset in this guild we fall
+/// back to treating the whole input as a preset name.
+pub async fn find_by_ref<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+    input: &str,
+) -> BotResult<Option<rental_question_presets::Model>> {
+    if let Some((id_part, _)) = input.split_once(':')
+        && let Ok(id) = id_part.trim().parse::<i32>()
+        && let Some(model) = find_by_id(db, id).await?
+        && model.guild_id == guild_id as i64
+    {
+        return Ok(Some(model));
+    }
+    find_by_name(db, guild_id, input).await
+}
+
+/// Format a preset as the `"id:name"` label shown in autocomplete suggestions.
+pub fn format_ref_label(model: &rental_question_presets::Model) -> String {
+    format!("{}:{}", model.id, model.name)
 }
 
 fn normalize_items(mut items: Vec<Option<String>>) -> Vec<Option<String>> {
