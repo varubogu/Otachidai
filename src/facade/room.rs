@@ -55,6 +55,35 @@ pub async fn set_room_group<C: ConnectionTrait>(
     }
 }
 
+/// Assign (or, with `question_preset_id = None`, clear) the question preset of a room
+/// identified by its text and/or voice channel. Returns `false` when no matching room exists.
+pub async fn set_room_preset<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+    text_channel_id: Option<u64>,
+    voice_channel_id: Option<u64>,
+    question_preset_id: Option<i32>,
+) -> BotResult<bool> {
+    let mut query = rooms::Entity::find().filter(rooms::Column::GuildId.eq(guild_id as i64));
+
+    if let Some(tid) = text_channel_id {
+        query = query.filter(rooms::Column::TextChannelId.eq(tid as i64));
+    }
+    if let Some(vid) = voice_channel_id {
+        query = query.filter(rooms::Column::VoiceChannelId.eq(vid as i64));
+    }
+
+    match query.one(db).await? {
+        Some(room) => {
+            let mut model: rooms::ActiveModel = room.into();
+            model.question_preset_id = Set(question_preset_id);
+            model.update(db).await?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
 pub async fn list_rooms_by_group<C: ConnectionTrait>(
     db: &C,
     guild_id: u64,

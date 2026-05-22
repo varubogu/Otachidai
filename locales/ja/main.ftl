@@ -36,6 +36,9 @@ admin-question-preset-saved = 質問プリセットを保存しました。
 admin-question-preset-name-required = プリセット名を指定してください。
 admin-question-preset-at-least-one = question_1 ～ question_10 のいずれかを指定してください。
 admin-question-preset-not-found = 指定された質問プリセットが見つかりませんでした。
+admin-question-preset-deleted = 質問プリセットを削除しました。
+admin-question-preset-list-empty = 登録済みの質問プリセットはありません。
+admin-question-preset-list-header = 登録済みの質問プリセット:
 admin-room-registered = 部屋を登録しました。
 admin-room-deleted = 部屋を削除しました。
 admin-room-not-found = 指定されたチャンネルIDの部屋が見つかりませんでした。
@@ -48,6 +51,12 @@ admin-group-exists = グループ「{ $name }」は既に存在します。
 admin-group-name-required = グループ名を指定してください。
 admin-room-group-updated = 部屋をグループ「{ $name }」に移動しました。
 admin-room-group-cleared = 部屋のグループ所属を解除しました。
+admin-room-preset-updated = 部屋の質問プリセットを「{ $name }」に変更しました。
+admin-room-preset-cleared = 部屋の質問プリセットを解除しました。
+admin-room-list-empty = 登録済みの部屋はありません。
+admin-room-list-header = 登録済みの部屋:
+admin-room-list-item = [{ $id }] { $channels } | プリセット: { $preset } | グループ: { $group }
+admin-room-list-none = （なし）
 
 ## ヘルプ
 help-title = otachidai Bot — ヘルプ
@@ -57,9 +66,13 @@ help-user = **ユーザーコマンド**
 help-admin = **管理者コマンド**
     `/register_report_channel` — タイムアウト通知チャンネルを登録する
     `/register_rental_button_channel` — レンタルボタンを投稿するチャンネルを登録する
-    `/register_question_preset` — 部屋ごとの質問プリセットを登録する
+    `/register_question_preset` — 部屋ごとの質問プリセットを登録・変更する
+    `/list_question_presets` — 登録済みの質問プリセットを一覧表示する
+    `/delete_question_preset` — 質問プリセットを削除する
     `/register_room` — 部屋を登録する（テキストチャンネル、ボイスチャンネル、またはその両方）
+    `/list_rooms` — 登録済み部屋を一覧表示する
     `/delete_room` — 登録済み部屋を削除する
+    `/set_room_preset` — 部屋の質問プリセットを変更する
     `/register_group` — 部屋グループを登録する（複数の部屋を1つのステータスボードにまとめる）
     `/delete_group` — 部屋グループを削除する
     `/set_room_group` — 部屋の所属グループを変更する

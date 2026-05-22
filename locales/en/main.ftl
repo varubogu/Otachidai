@@ -36,6 +36,9 @@ admin-question-preset-saved = Question preset saved.
 admin-question-preset-name-required = Please specify a preset name.
 admin-question-preset-at-least-one = Specify at least one of question_1 through question_10.
 admin-question-preset-not-found = The specified question preset was not found.
+admin-question-preset-deleted = Question preset deleted.
+admin-question-preset-list-empty = No question presets are registered.
+admin-question-preset-list-header = Registered question presets:
 admin-room-registered = Room registered successfully.
 admin-room-deleted = Room deleted successfully.
 admin-room-not-found = No room found with those channel IDs.
@@ -48,6 +51,12 @@ admin-group-exists = Group "{ $name }" already exists.
 admin-group-name-required = Please specify a group name.
 admin-room-group-updated = Room moved to group "{ $name }".
 admin-room-group-cleared = Room removed from its group.
+admin-room-preset-updated = Room question preset changed to "{ $name }".
+admin-room-preset-cleared = Room question preset cleared.
+admin-room-list-empty = No rooms are registered.
+admin-room-list-header = Registered rooms:
+admin-room-list-item = [{ $id }] { $channels } | preset: { $preset } | group: { $group }
+admin-room-list-none = (none)
 
 ## Help
 help-title = otachidai Bot — Help
@@ -57,9 +66,13 @@ help-user = **User Commands**
 help-admin = **Admin Commands**
     `/register_report_channel` — Register the channel for timeout notifications
     `/register_rental_button_channel` — Register the channel where the rental button is posted
-    `/register_question_preset` — Register a question preset for rooms
+    `/register_question_preset` — Register or update a question preset for rooms
+    `/list_question_presets` — List registered question presets
+    `/delete_question_preset` — Delete a question preset
     `/register_room` — Register a room (text channel, voice channel, or both)
+    `/list_rooms` — List registered rooms
     `/delete_room` — Delete a registered room
+    `/set_room_preset` — Change a room's question preset
     `/register_group` — Register a room group (bundles rooms into one status board)
     `/delete_group` — Delete a room group
     `/set_room_group` — Change which group a room belongs to

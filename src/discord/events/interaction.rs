@@ -56,11 +56,15 @@ async fn handle_command(
         "register_report_channel"
             | "register_rental_button_channel"
             | "register_question_preset"
+            | "list_question_presets"
+            | "delete_question_preset"
             | "register_room"
+            | "list_rooms"
             | "delete_room"
             | "register_group"
             | "delete_group"
             | "set_room_group"
+            | "set_room_preset"
     );
 
     if is_admin_command && !check_admin_permission(&interaction) {
@@ -115,6 +119,33 @@ async fn handle_command(
             });
             simple_response(&msg)
         }
+        "list_question_presets" => {
+            let msg = crate::discord::commands::admin::list_question_presets::handle(
+                state.clone(),
+                guild_id,
+                &lang,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("{e}");
+                "Error".to_string()
+            });
+            simple_response(&msg)
+        }
+        "delete_question_preset" => {
+            let msg = crate::discord::commands::admin::delete_question_preset::handle(
+                state.clone(),
+                guild_id,
+                data,
+                &lang,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("{e}");
+                "Error".to_string()
+            });
+            simple_response(&msg)
+        }
         "register_room" => {
             let msg = crate::discord::commands::admin::register_room::handle(
                 state.clone(),
@@ -141,6 +172,16 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
+            simple_response(&msg)
+        }
+        "list_rooms" => {
+            let msg =
+                crate::discord::commands::admin::list_rooms::handle(state.clone(), guild_id, &lang)
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::error!("{e}");
+                        "Error".to_string()
+                    });
             simple_response(&msg)
         }
         "register_group" => {
@@ -173,6 +214,20 @@ async fn handle_command(
         }
         "set_room_group" => {
             let msg = crate::discord::commands::admin::set_room_group::handle(
+                state.clone(),
+                guild_id,
+                data,
+                &lang,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("{e}");
+                "Error".to_string()
+            });
+            simple_response(&msg)
+        }
+        "set_room_preset" => {
+            let msg = crate::discord::commands::admin::set_room_preset::handle(
                 state.clone(),
                 guild_id,
                 data,
@@ -232,7 +287,9 @@ async fn handle_autocomplete(
     });
 
     let choices = match (data.name.as_str(), focused) {
-        ("register_room", Some(("question_preset", current))) => {
+        ("register_room", Some(("question_preset", current)))
+        | ("set_room_preset", Some(("question_preset", current)))
+        | ("delete_question_preset", Some(("name", current))) => {
             question_preset_choices(&state, guild_id, current).await
         }
         _ => Vec::new(),

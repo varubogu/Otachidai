@@ -117,6 +117,23 @@ pub async fn register_global_commands(
         )
         .build(),
         CommandBuilder::new(
+            "list_question_presets",
+            "List registered question presets",
+            CommandType::ChatInput,
+        )
+        .build(),
+        CommandBuilder::new(
+            "delete_question_preset",
+            "Delete a registered question preset",
+            CommandType::ChatInput,
+        )
+        .option(
+            StringBuilder::new("name", "Preset to delete")
+                .autocomplete(true)
+                .required(true),
+        )
+        .build(),
+        CommandBuilder::new(
             "register_room",
             "Register a room (text channel, voice channel, or both)",
             CommandType::ChatInput,
@@ -166,6 +183,30 @@ pub async fn register_global_commands(
         .option(
             StringBuilder::new("group", "Group name to assign (leave empty to ungroup)")
                 .required(false),
+        )
+        .build(),
+        CommandBuilder::new(
+            "set_room_preset",
+            "Change the question preset a registered room uses",
+            CommandType::ChatInput,
+        )
+        .option(
+            ChannelBuilder::new("text_channel", "Text channel of the target room").required(false),
+        )
+        .option(
+            ChannelBuilder::new("voice_channel", "Voice channel of the target room")
+                .required(false),
+        )
+        .option(
+            StringBuilder::new("question_preset", "Preset to assign (leave empty to clear)")
+                .autocomplete(true)
+                .required(false),
+        )
+        .build(),
+        CommandBuilder::new(
+            "list_rooms",
+            "List registered rooms",
+            CommandType::ChatInput,
         )
         .build(),
         CommandBuilder::new(

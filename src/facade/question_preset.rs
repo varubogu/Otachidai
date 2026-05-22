@@ -257,6 +257,23 @@ pub async fn find_by_ref<C: ConnectionTrait>(
     find_by_name(db, guild_id, input).await
 }
 
+/// Delete a preset resolved from a command reference (`"id:name"` or a bare name).
+/// Returns the deleted model, or `None` when no preset matched. Rooms referencing the
+/// preset have their `question_preset_id` set to NULL by the FK's `ON DELETE SET NULL`.
+pub async fn delete_by_ref<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+    input: &str,
+) -> BotResult<Option<rental_question_presets::Model>> {
+    let preset = find_by_ref(db, guild_id, input).await?;
+    if let Some(ref p) = preset {
+        rental_question_presets::Entity::delete_by_id(p.id)
+            .exec(db)
+            .await?;
+    }
+    Ok(preset)
+}
+
 /// Format a preset as the `"id:name"` label shown in autocomplete suggestions.
 pub fn format_ref_label(model: &rental_question_presets::Model) -> String {
     format!("{}:{}", model.id, model.name)
