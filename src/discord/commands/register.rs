@@ -127,6 +127,45 @@ pub async fn register_global_commands(
             StringBuilder::new("question_preset", "Question preset name for this room")
                 .required(false),
         )
+        .option(StringBuilder::new("group", "Group name this room belongs to").required(false))
+        .build(),
+        CommandBuilder::new(
+            "register_group",
+            "Register a room group that bundles rooms into one status board",
+            CommandType::ChatInput,
+        )
+        .option(StringBuilder::new("name", "Group name").required(true))
+        .option(
+            ChannelBuilder::new(
+                "channel",
+                "The channel to post this group's status board in",
+            )
+            .required(true),
+        )
+        .build(),
+        CommandBuilder::new(
+            "delete_group",
+            "Delete a room group",
+            CommandType::ChatInput,
+        )
+        .option(StringBuilder::new("name", "Group name").required(true))
+        .build(),
+        CommandBuilder::new(
+            "set_room_group",
+            "Change which group a registered room belongs to",
+            CommandType::ChatInput,
+        )
+        .option(
+            ChannelBuilder::new("text_channel", "Text channel of the target room").required(false),
+        )
+        .option(
+            ChannelBuilder::new("voice_channel", "Voice channel of the target room")
+                .required(false),
+        )
+        .option(
+            StringBuilder::new("group", "Group name to assign (leave empty to ungroup)")
+                .required(false),
+        )
         .build(),
         CommandBuilder::new(
             "delete_room",

@@ -11,6 +11,7 @@ pub async fn register_room<C: ConnectionTrait>(
     text_channel_id: Option<u64>,
     voice_channel_id: Option<u64>,
     question_preset_id: Option<i32>,
+    group_id: Option<i32>,
 ) -> BotResult<rooms::Model> {
     let model = rooms::ActiveModel {
         guild_id: Set(guild_id as i64),
@@ -18,10 +19,67 @@ pub async fn register_room<C: ConnectionTrait>(
         voice_channel_id: Set(voice_channel_id.map(|id| id as i64)),
         is_available: Set(true),
         question_preset_id: Set(question_preset_id),
+        group_id: Set(group_id),
         created_at: Set(chrono::Utc::now().fixed_offset()),
         ..Default::default()
     };
     model.insert(db).await.map_err(BotError::from)
+}
+
+/// Assign (or, with `group_id = None`, clear) the group of a room identified by
+/// its text and/or voice channel. Returns `false` when no matching room exists.
+pub async fn set_room_group<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+    text_channel_id: Option<u64>,
+    voice_channel_id: Option<u64>,
+    group_id: Option<i32>,
+) -> BotResult<bool> {
+    let mut query = rooms::Entity::find().filter(rooms::Column::GuildId.eq(guild_id as i64));
+
+    if let Some(tid) = text_channel_id {
+        query = query.filter(rooms::Column::TextChannelId.eq(tid as i64));
+    }
+    if let Some(vid) = voice_channel_id {
+        query = query.filter(rooms::Column::VoiceChannelId.eq(vid as i64));
+    }
+
+    match query.one(db).await? {
+        Some(room) => {
+            let mut model: rooms::ActiveModel = room.into();
+            model.group_id = Set(group_id);
+            model.update(db).await?;
+            Ok(true)
+        }
+        None => Ok(false),
+    }
+}
+
+pub async fn list_rooms_by_group<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+    group_id: i32,
+) -> BotResult<Vec<rooms::Model>> {
+    rooms::Entity::find()
+        .filter(rooms::Column::GuildId.eq(guild_id as i64))
+        .filter(rooms::Column::GroupId.eq(group_id))
+        .order_by_asc(rooms::Column::Id)
+        .all(db)
+        .await
+        .map_err(BotError::from)
+}
+
+pub async fn list_ungrouped_rooms<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+) -> BotResult<Vec<rooms::Model>> {
+    rooms::Entity::find()
+        .filter(rooms::Column::GuildId.eq(guild_id as i64))
+        .filter(rooms::Column::GroupId.is_null())
+        .order_by_asc(rooms::Column::Id)
+        .all(db)
+        .await
+        .map_err(BotError::from)
 }
 
 pub async fn delete_room<C: ConnectionTrait>(

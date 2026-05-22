@@ -1,8 +1,10 @@
 use crate::app_state::AppState;
 use crate::db::rls::with_guild_context;
-use crate::entities::rental_sessions;
+use crate::entities::{rental_sessions, rooms};
 use crate::error::BotResult;
-use crate::facade::{guild_settings, rental as rental_facade, room as room_facade};
+use crate::facade::{
+    group as group_facade, guild_settings, rental as rental_facade, room as room_facade,
+};
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
 use fluent_bundle::FluentArgs;
@@ -14,21 +16,52 @@ use twilight_model::id::{
     marker::{ChannelMarker, GuildMarker, MessageMarker},
 };
 
-/// Spawn a background refresh of the rental-status board message. Fire-and-forget
+/// Spawn a background refresh of the rental-status boards. Fire-and-forget
 /// so it never adds latency to interaction responses or event handling.
 pub fn trigger(state: &Arc<AppState>, guild_id: u64) {
     let state = state.clone();
     tokio::spawn(async move {
         if let Err(e) = refresh(&state, guild_id).await {
-            tracing::warn!(guild_id, "Failed to refresh rental status board: {e}");
+            tracing::warn!(guild_id, "Failed to refresh rental status boards: {e}");
         }
     });
 }
 
-/// Rebuild the rental-status board message in the configured rental-button channel.
-/// Edits the stored message if present; otherwise (or if it was deleted) posts a new
-/// one and persists its id.
+/// Rebuild every rental-status board for a guild: the guild-wide board (ungrouped
+/// rooms, posted in the rental-button channel) and one board per room group.
 pub async fn refresh(state: &Arc<AppState>, guild_id: u64) -> BotResult<()> {
+    let lang = resolve_language(state, Id::<GuildMarker>::new(guild_id), None).await;
+
+    let sessions = with_guild_context(&state.db.guild, guild_id, |txn| {
+        Box::pin(async move { rental_facade::find_active_sessions_by_guild(txn, guild_id).await })
+    })
+    .await?;
+    let groups = with_guild_context(&state.db.guild, guild_id, |txn| {
+        Box::pin(async move { group_facade::list_groups(txn, guild_id).await })
+    })
+    .await?;
+
+    refresh_guild_board(state, guild_id, &lang, &sessions).await?;
+
+    for group in groups {
+        if let Err(e) = refresh_group_board(state, guild_id, &lang, &group, &sessions).await {
+            tracing::warn!(
+                guild_id,
+                group_id = group.id,
+                "Failed to refresh group status board: {e}"
+            );
+        }
+    }
+    Ok(())
+}
+
+/// Refresh the guild-wide board (ungrouped rooms) in the rental-button channel.
+async fn refresh_guild_board(
+    state: &Arc<AppState>,
+    guild_id: u64,
+    lang: &str,
+    sessions: &[rental_sessions::Model],
+) -> BotResult<()> {
     let row = with_guild_context(&state.db.guild, guild_id, |txn| {
         Box::pin(async move { guild_settings::get_rental_button_channel_row(txn, guild_id).await })
     })
@@ -40,58 +73,104 @@ pub async fn refresh(state: &Arc<AppState>, guild_id: u64) -> BotResult<()> {
     };
     let channel_id = Id::<ChannelMarker>::new(row.channel_id as u64);
 
-    let lang = resolve_language(state, Id::<GuildMarker>::new(guild_id), None).await;
-    let content = build_content(state, guild_id, &lang).await?;
+    let rooms = with_guild_context(&state.db.guild, guild_id, |txn| {
+        Box::pin(async move { room_facade::list_ungrouped_rooms(txn, guild_id).await })
+    })
+    .await?;
+
+    let title = state.i18n.get(lang, &MessageKey::StatusTitle);
+    let content = build_content(state, lang, &title, &rooms, sessions);
+
+    let stored = row.message_id.map(|id| id as u64);
+    let new_id = render_board(state, channel_id, stored, &content).await?;
+
+    if Some(new_id) != stored {
+        with_guild_context(&state.db.guild, guild_id, |txn| {
+            Box::pin(async move {
+                guild_settings::set_rental_button_message_id(txn, guild_id, Some(new_id)).await
+            })
+        })
+        .await?;
+    }
+    Ok(())
+}
+
+/// Refresh a single room group's board in that group's configured channel.
+async fn refresh_group_board(
+    state: &Arc<AppState>,
+    guild_id: u64,
+    lang: &str,
+    group: &crate::entities::room_groups::Model,
+    sessions: &[rental_sessions::Model],
+) -> BotResult<()> {
+    let channel_id = Id::<ChannelMarker>::new(group.channel_id as u64);
+    let group_id = group.id;
+
+    let rooms = with_guild_context(&state.db.guild, guild_id, |txn| {
+        Box::pin(async move { room_facade::list_rooms_by_group(txn, guild_id, group_id).await })
+    })
+    .await?;
+
+    let content = build_content(state, lang, &group.name, &rooms, sessions);
+
+    let stored = group.message_id.map(|id| id as u64);
+    let new_id = render_board(state, channel_id, stored, &content).await?;
+
+    if Some(new_id) != stored {
+        with_guild_context(&state.db.guild, guild_id, |txn| {
+            Box::pin(async move {
+                group_facade::set_group_message_id(txn, group_id, Some(new_id)).await
+            })
+        })
+        .await?;
+    }
+    Ok(())
+}
+
+/// Edit the stored board message if present; otherwise (or if it was deleted)
+/// post a new one. Returns the id of the message that now holds the board.
+async fn render_board(
+    state: &Arc<AppState>,
+    channel_id: Id<ChannelMarker>,
+    current: Option<u64>,
+    content: &str,
+) -> BotResult<u64> {
     let allowed = AllowedMentions::default();
 
-    if let Some(message_id) = row.message_id {
-        let message_id = Id::<MessageMarker>::new(message_id as u64);
+    if let Some(message_id) = current {
         let updated = state
             .http
-            .update_message(channel_id, message_id)
-            .content(Some(&content))
+            .update_message(channel_id, Id::<MessageMarker>::new(message_id))
+            .content(Some(content))
             .allowed_mentions(Some(&allowed))
             .await;
         if updated.is_ok() {
-            return Ok(());
+            return Ok(message_id);
         }
-        tracing::info!(guild_id, "Status board message is gone; recreating it");
+        tracing::info!("Status board message is gone; recreating it");
     }
 
     let message = state
         .http
         .create_message(channel_id)
-        .content(&content)
+        .content(content)
         .allowed_mentions(Some(&allowed))
         .await?
         .model()
         .await?;
-
-    let new_message_id = message.id.get();
-    with_guild_context(&state.db.guild, guild_id, |txn| {
-        Box::pin(async move {
-            guild_settings::set_rental_button_message_id(txn, guild_id, Some(new_message_id)).await
-        })
-    })
-    .await?;
-    Ok(())
+    Ok(message.id.get())
 }
 
-async fn build_content(state: &Arc<AppState>, guild_id: u64, lang: &str) -> BotResult<String> {
-    let rooms = with_guild_context(&state.db.guild, guild_id, |txn| {
-        Box::pin(async move { room_facade::list_rooms(txn, guild_id).await })
-    })
-    .await?;
-    let sessions = with_guild_context(&state.db.guild, guild_id, |txn| {
-        Box::pin(async move { rental_facade::find_active_sessions_by_guild(txn, guild_id).await })
-    })
-    .await?;
-
-    let title = state.i18n.get(lang, &MessageKey::StatusTitle);
-
+fn build_content(
+    state: &Arc<AppState>,
+    lang: &str,
+    title: &str,
+    rooms: &[rooms::Model],
+    sessions: &[rental_sessions::Model],
+) -> String {
     if rooms.is_empty() {
         let no_rooms = state.i18n.get(lang, &MessageKey::StatusNoRooms);
-        return Ok(format!("**{title}**\n\n{no_rooms}"));
+        return format!("**{title}**\n\n{no_rooms}");
     }
 
     let by_room: HashMap<i32, &rental_sessions::Model> =
@@ -106,7 +185,7 @@ async fn build_content(state: &Arc<AppState>, guild_id: u64, lang: &str) -> BotR
     let mut free = 0u32;
     let mut used = 0u32;
 
-    for room in &rooms {
+    for room in rooms {
         let mention = room
             .voice_channel_id
             .or(room.text_channel_id)
@@ -143,5 +222,5 @@ async fn build_content(state: &Arc<AppState>, guild_id: u64, lang: &str) -> BotR
         .i18n
         .get_with_args(lang, &MessageKey::StatusSummary, Some(&args));
 
-    Ok(format!("**{title}**\n\n{}\n\n{summary}", lines.join("\n")))
+    format!("**{title}**\n\n{}\n\n{summary}", lines.join("\n"))
 }

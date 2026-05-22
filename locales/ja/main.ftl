@@ -41,6 +41,13 @@ admin-room-deleted = 部屋を削除しました。
 admin-room-not-found = 指定されたチャンネルIDの部屋が見つかりませんでした。
 admin-permission-denied = このコマンドを使用するにはサーバー管理者権限が必要です。
 admin-room-at-least-one = text_channel_id または voice_channel_id のいずれかが必要です。
+admin-group-registered = グループ「{ $name }」を登録しました。ステータスボードは { $channel } に投稿されます。
+admin-group-deleted = グループ「{ $name }」を削除しました。
+admin-group-not-found = グループ「{ $name }」が見つかりません。
+admin-group-exists = グループ「{ $name }」は既に存在します。
+admin-group-name-required = グループ名を指定してください。
+admin-room-group-updated = 部屋をグループ「{ $name }」に移動しました。
+admin-room-group-cleared = 部屋のグループ所属を解除しました。
 
 ## ヘルプ
 help-title = otachidai Bot — ヘルプ
@@ -53,6 +60,9 @@ help-admin = **管理者コマンド**
     `/register_question_preset` — 部屋ごとの質問プリセットを登録する
     `/register_room` — 部屋を登録する（テキストチャンネル、ボイスチャンネル、またはその両方）
     `/delete_room` — 登録済み部屋を削除する
+    `/register_group` — 部屋グループを登録する（複数の部屋を1つのステータスボードにまとめる）
+    `/delete_group` — 部屋グループを削除する
+    `/set_room_group` — 部屋の所属グループを変更する
 
 ## レンタルボタン
 rent-button-label = 部屋をリクエスト

@@ -10,6 +10,7 @@ pub struct Model {
     pub voice_channel_id: Option<i64>,
     pub is_available: bool,
     pub question_preset_id: Option<i32>,
+    pub group_id: Option<i32>,
     pub created_at: DateTimeWithTimeZone,
 }
 

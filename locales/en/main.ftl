@@ -41,6 +41,13 @@ admin-room-deleted = Room deleted successfully.
 admin-room-not-found = No room found with those channel IDs.
 admin-permission-denied = You must be a server administrator to use this command.
 admin-room-at-least-one = At least one of text_channel_id or voice_channel_id is required.
+admin-group-registered = Group "{ $name }" registered. Status board will be posted in { $channel }.
+admin-group-deleted = Group "{ $name }" deleted.
+admin-group-not-found = Group "{ $name }" not found.
+admin-group-exists = Group "{ $name }" already exists.
+admin-group-name-required = Please specify a group name.
+admin-room-group-updated = Room moved to group "{ $name }".
+admin-room-group-cleared = Room removed from its group.
 
 ## Help
 help-title = otachidai Bot — Help
@@ -53,6 +60,9 @@ help-admin = **Admin Commands**
     `/register_question_preset` — Register a question preset for rooms
     `/register_room` — Register a room (text channel, voice channel, or both)
     `/delete_room` — Delete a registered room
+    `/register_group` — Register a room group (bundles rooms into one status board)
+    `/delete_group` — Delete a room group
+    `/set_room_group` — Change which group a room belongs to
 
 ## Rent button
 rent-button-label = Request Room

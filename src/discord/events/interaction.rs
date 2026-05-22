@@ -52,6 +52,9 @@ async fn handle_command(
             | "register_question_preset"
             | "register_room"
             | "delete_room"
+            | "register_group"
+            | "delete_group"
+            | "set_room_group"
     );
 
     if is_admin_command && !check_admin_permission(&interaction) {
@@ -122,6 +125,48 @@ async fn handle_command(
         }
         "delete_room" => {
             let msg = crate::discord::commands::admin::delete_room::handle(
+                state.clone(),
+                guild_id,
+                data,
+                &lang,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("{e}");
+                "Error".to_string()
+            });
+            simple_response(&msg)
+        }
+        "register_group" => {
+            let msg = crate::discord::commands::admin::register_group::handle(
+                state.clone(),
+                guild_id,
+                data,
+                &lang,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("{e}");
+                "Error".to_string()
+            });
+            simple_response(&msg)
+        }
+        "delete_group" => {
+            let msg = crate::discord::commands::admin::delete_group::handle(
+                state.clone(),
+                guild_id,
+                data,
+                &lang,
+            )
+            .await
+            .unwrap_or_else(|e| {
+                tracing::error!("{e}");
+                "Error".to_string()
+            });
+            simple_response(&msg)
+        }
+        "set_room_group" => {
+            let msg = crate::discord::commands::admin::set_room_group::handle(
                 state.clone(),
                 guild_id,
                 data,
