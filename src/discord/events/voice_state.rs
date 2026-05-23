@@ -146,15 +146,8 @@ async fn handle_join(
         ..
     } = result
     {
-        let prompt = state
-            .i18n
-            .get(&lang, &crate::i18n::MessageKey::BotRentalRequestStart);
-
-        use crate::discord::components::rental_button::build_rental_button_with_custom_id;
-        let btn_label = state
-            .i18n
-            .get(&lang, &crate::i18n::MessageKey::RentButtonLabel);
-        let content = format!("<@{}>\n{}", user_id.get(), prompt);
+        let (content, components) =
+            rental_flow::build_join_answer_button(&state, &lang, user_id, session_id, room_id);
         let allowed_mentions = AllowedMentions {
             users: vec![user_id],
             ..Default::default()
@@ -167,13 +160,10 @@ async fn handle_join(
             .create_message(notification_channel_id)
             .content(&content)
             .allowed_mentions(Some(&allowed_mentions))
-            .components(&build_rental_button_with_custom_id(
-                btn_label,
-                format!("rental_start:{session_id}:{room_id}"),
-            ))
+            .components(&components)
             .await
         {
-            tracing::warn!(%guild_id, %user_id, %channel_id, %notification_channel_id, error = %err, "Failed to post rental prompt");
+            tracing::warn!(%guild_id, %user_id, %channel_id, %notification_channel_id, error = %err, "Failed to post rental question prompt");
             rental_flow::release_rental(state, guild_id, user_id, channel_id.get()).await?;
         }
     }

@@ -1,7 +1,5 @@
 ## レンタルフロー
 bot-rental-request-start = 利用目的を入力してください。10分以内に送信してください。
-bot-rental-purpose-label = 利用目的
-bot-rental-answers-label = 質問への回答
 bot-rental-answer-prefix = 回答
 bot-rental-assigned = 部屋が割り当てられました！{ $channel } をご利用ください。
 bot-rental-timeout = レンタルリクエストがタイムアウトしました。もう一度お試しください。
@@ -10,8 +8,6 @@ bot-rental-released = 部屋を解放しました。ご利用ありがとうご�
 bot-rental-no-rooms = 現在利用可能な部屋がありません。しばらくしてからもう一度お試しください。
 bot-rental-already-renting = すでにアクティブなレンタルがあります。
 bot-rental-room-occupied = その部屋は現在使用中です。
-bot-rental-dropdown-prompt = 以下の質問に回答し、「確認」ボタンを押してください。
-bot-rental-dropdown-confirm = 確認
 bot-rental-expired = レンタル申請の有効期限が切れました。もう一度申請してください。
 
 ## 引き継ぎ
@@ -79,6 +75,7 @@ help-admin = **管理者コマンド**
 
 ## レンタルボタン
 rent-button-label = 部屋をリクエスト
+rent-answer-button-label = 回答する
 
 ## エラー
 error-generic = エラーが発生しました。もう一度お試しください。

@@ -1,7 +1,5 @@
 pub enum MessageKey {
     BotRentalRequestStart,
-    BotRentalPurposeLabel,
-    BotRentalAnswersLabel,
     BotRentalAnswerPrefix,
     BotRentalAssigned,
     BotRentalTimeout,
@@ -10,8 +8,6 @@ pub enum MessageKey {
     BotRentalNoRooms,
     BotRentalAlreadyRenting,
     BotRentalRoomOccupied,
-    BotRentalDropdownPrompt,
-    BotRentalDropdownConfirm,
     BotRentalExpired,
     StatusTitle,
     StatusAvailable,
@@ -55,6 +51,7 @@ pub enum MessageKey {
     HelpUser,
     HelpAdmin,
     RentButtonLabel,
+    RentAnswerButtonLabel,
     ErrorGeneric,
     ErrorDb,
 }
@@ -63,8 +60,6 @@ impl MessageKey {
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::BotRentalRequestStart => "bot-rental-request-start",
-            Self::BotRentalPurposeLabel => "bot-rental-purpose-label",
-            Self::BotRentalAnswersLabel => "bot-rental-answers-label",
             Self::BotRentalAnswerPrefix => "bot-rental-answer-prefix",
             Self::BotRentalAssigned => "bot-rental-assigned",
             Self::BotRentalTimeout => "bot-rental-timeout",
@@ -73,8 +68,6 @@ impl MessageKey {
             Self::BotRentalNoRooms => "bot-rental-no-rooms",
             Self::BotRentalAlreadyRenting => "bot-rental-already-renting",
             Self::BotRentalRoomOccupied => "bot-rental-room-occupied",
-            Self::BotRentalDropdownPrompt => "bot-rental-dropdown-prompt",
-            Self::BotRentalDropdownConfirm => "bot-rental-dropdown-confirm",
             Self::BotRentalExpired => "bot-rental-expired",
             Self::StatusTitle => "status-title",
             Self::StatusAvailable => "status-available",
@@ -118,6 +111,7 @@ impl MessageKey {
             Self::HelpUser => "help-user",
             Self::HelpAdmin => "help-admin",
             Self::RentButtonLabel => "rent-button-label",
+            Self::RentAnswerButtonLabel => "rent-answer-button-label",
             Self::ErrorGeneric => "error-generic",
             Self::ErrorDb => "error-db",
         }

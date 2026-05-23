@@ -8,7 +8,7 @@ use crate::facade::{
 };
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
-use crate::rental::state_machine::{RentalState, RentalStateEntry, get_dropdown_answers};
+use crate::rental::state_machine::{RentalState, RentalStateEntry};
 use crate::rental::timeout::spawn_purpose_timeout;
 use fluent_bundle::FluentArgs;
 use sea_orm::EntityTrait;
@@ -20,12 +20,9 @@ use twilight_model::id::{
     marker::{ChannelMarker, GuildMarker, UserMarker},
 };
 use twilight_model::{
-    channel::message::{
-        MessageFlags,
-        component::{
-            ActionRow, Button, ButtonStyle, Component, SelectMenu, SelectMenuOption,
-            SelectMenuType, TextInput, TextInputStyle,
-        },
+    channel::message::component::{
+        ActionRow, Button, ButtonStyle, Component, Label, SelectMenu, SelectMenuOption,
+        SelectMenuType, TextInput, TextInputStyle,
     },
     http::interaction::{InteractionResponse, InteractionResponseData, InteractionResponseType},
 };
@@ -45,81 +42,36 @@ pub enum StartRentalResult {
     NoAvailableRooms,
 }
 
-pub fn build_purpose_modal(
-    state: &AppState,
-    lang: &str,
-    session_id: i32,
-    room_id: i32,
-    questions: &[String],
-) -> InteractionResponse {
-    let title = state.i18n.get(lang, &MessageKey::BotRentalRequestStart);
-    let label = if questions.is_empty() {
-        state.i18n.get(lang, &MessageKey::BotRentalPurposeLabel)
-    } else {
-        state.i18n.get(lang, &MessageKey::BotRentalAnswersLabel)
-    };
-    let value = if questions.is_empty() {
-        None
-    } else {
-        let answer_prefix = state.i18n.get(lang, &MessageKey::BotRentalAnswerPrefix);
-        Some(answer_template(questions, &answer_prefix))
-    };
+/// Discord caps a modal at 5 top-level components, so at most 5 questions fit.
+const MODAL_MAX_QUESTIONS: usize = 5;
 
-    InteractionResponse {
-        kind: InteractionResponseType::Modal,
-        data: Some(InteractionResponseData {
-            custom_id: Some(format!("purpose_modal:{session_id}:{room_id}")),
-            title: Some(title),
-            components: Some(vec![Component::ActionRow(ActionRow {
-                id: None,
-                components: vec![Component::TextInput(TextInput {
-                    id: None,
-                    custom_id: "purpose_text".to_string(),
-                    #[allow(deprecated)]
-                    label: Some(label),
-                    style: TextInputStyle::Paragraph,
-                    min_length: Some(1),
-                    max_length: Some(4000),
-                    placeholder: None,
-                    required: Some(true),
-                    value,
-                })],
-            })]),
-            ..Default::default()
-        }),
-    }
+/// Custom-id prefix for a question's input inside the unified modal: `mq_{index}`.
+fn modal_question_custom_id(index: usize) -> String {
+    format!("mq_{index}")
 }
 
-/// Build a modal with individual TextInputs for text-only questions (used after dropdown phase).
-pub fn build_text_questions_modal(
+/// Truncate a string to `max` characters on a char boundary (Discord label/option limits
+/// are measured in characters; naive byte slicing would panic on multi-byte text).
+fn truncate_chars(value: &str, max: usize) -> String {
+    value.chars().take(max).collect()
+}
+
+/// Build the single unified modal that collects every question's answer in one submission:
+/// dropdown questions become `Label`-wrapped select menus, free-text questions become
+/// `Label`-wrapped text inputs. Each input's `Label` carries the question text.
+pub fn build_unified_modal(
     state: &AppState,
     lang: &str,
     session_id: i32,
     room_id: i32,
-    text_questions: &[&QuestionWithInput],
+    questions: &[QuestionWithInput],
 ) -> InteractionResponse {
     let title = state.i18n.get(lang, &MessageKey::BotRentalRequestStart);
 
-    let components: Vec<Component> = text_questions
+    let components: Vec<Component> = questions
         .iter()
-        .take(5) // Discord modal limit: 5 ActionRows
-        .map(|q| {
-            Component::ActionRow(ActionRow {
-                id: None,
-                components: vec![Component::TextInput(TextInput {
-                    id: None,
-                    custom_id: format!("qt_{}", q.index),
-                    #[allow(deprecated)]
-                    label: Some(format!("{}. {}", q.index + 1, q.text)),
-                    style: TextInputStyle::Short,
-                    min_length: Some(1),
-                    max_length: Some(200),
-                    placeholder: None,
-                    required: Some(true),
-                    value: None,
-                })],
-            })
-        })
+        .take(MODAL_MAX_QUESTIONS)
+        .map(build_question_label)
         .collect();
 
     InteractionResponse {
@@ -133,130 +85,104 @@ pub fn build_text_questions_modal(
     }
 }
 
-/// Build an ephemeral message with select menus for dropdown questions + a confirm button.
-/// Up to 4 dropdown questions can be shown (Discord limit: 5 ActionRows, 1 used for button).
-pub fn build_dropdown_selection_message(
-    state: &AppState,
-    lang: &str,
-    session_id: i32,
-    room_id: i32,
-    dropdown_questions: &[&QuestionWithInput],
-    existing_answers: &[Option<String>],
-) -> InteractionResponse {
-    let confirm_label = state.i18n.get(lang, &MessageKey::BotRentalDropdownConfirm);
-    let prompt = state.i18n.get(lang, &MessageKey::BotRentalDropdownPrompt);
+/// Wrap one question's input component in a `Label` carrying its (truncated) question text.
+fn build_question_label(q: &QuestionWithInput) -> Component {
+    let custom_id = modal_question_custom_id(q.index);
+    let label_text = truncate_chars(&format!("{}. {}", q.index + 1, q.text), 45);
 
-    let mut action_rows: Vec<Component> = dropdown_questions
-        .iter()
-        .take(4)
-        .map(|q| {
-            let options = if let QuestionInput::Dropdown(opts) = &q.input {
-                let prev = existing_answers
-                    .get(q.index)
-                    .and_then(|a| a.as_deref())
-                    .unwrap_or("");
-                opts.iter()
-                    .map(|opt| SelectMenuOption {
-                        label: opt.clone(),
-                        value: opt.clone(),
-                        description: None,
-                        emoji: None,
-                        default: opt == prev,
-                    })
-                    .collect::<Vec<_>>()
-            } else {
-                vec![]
-            };
-
-            Component::ActionRow(ActionRow {
+    let inner = match &q.input {
+        QuestionInput::Dropdown(opts) => {
+            let options = opts
+                .iter()
+                .map(|opt| SelectMenuOption {
+                    label: truncate_chars(opt, 100),
+                    value: truncate_chars(opt, 100),
+                    description: None,
+                    emoji: None,
+                    default: false,
+                })
+                .collect::<Vec<_>>();
+            Component::SelectMenu(SelectMenu {
                 id: None,
-                components: vec![Component::SelectMenu(SelectMenu {
-                    id: None,
-                    channel_types: None,
-                    custom_id: format!("dqa:{session_id}:{}", q.index),
-                    default_values: None,
-                    disabled: false,
-                    kind: SelectMenuType::Text,
-                    max_values: Some(1),
-                    min_values: Some(1),
-                    options: Some(options),
-                    placeholder: Some(format!("{}. {}", q.index + 1, q.text)),
-                    required: None,
-                })],
+                channel_types: None,
+                custom_id,
+                default_values: None,
+                disabled: false,
+                kind: SelectMenuType::Text,
+                max_values: Some(1),
+                min_values: Some(1),
+                options: Some(options),
+                placeholder: None,
+                required: Some(true),
             })
-        })
-        .collect();
-
-    action_rows.push(Component::ActionRow(ActionRow {
-        id: None,
-        components: vec![Component::Button(Button {
+        }
+        QuestionInput::Text => Component::TextInput(TextInput {
             id: None,
-            custom_id: Some(format!("dqc:{session_id}:{room_id}")),
-            disabled: false,
-            emoji: None,
-            label: Some(confirm_label),
-            style: ButtonStyle::Primary,
-            url: None,
-            sku_id: None,
-        })],
-    }));
-
-    InteractionResponse {
-        kind: InteractionResponseType::ChannelMessageWithSource,
-        data: Some(InteractionResponseData {
-            content: Some(prompt),
-            components: Some(action_rows),
-            flags: Some(MessageFlags::EPHEMERAL),
-            ..Default::default()
+            custom_id,
+            // The wrapping `Label` supplies the visible label in modals; the deprecated
+            // per-input label must stay empty to avoid a duplicate.
+            #[allow(deprecated)]
+            label: None,
+            style: TextInputStyle::Paragraph,
+            min_length: Some(1),
+            max_length: Some(1000),
+            placeholder: None,
+            required: Some(true),
+            value: None,
         }),
-    }
+    };
+
+    Component::Label(Label {
+        id: None,
+        label: label_text,
+        description: None,
+        component: Box::new(inner),
+    })
 }
 
-pub async fn build_purpose_modal_for_room(
+/// Build the unified modal for a room, fetching its question preset first.
+pub async fn build_unified_modal_for_room(
     state: &AppState,
     guild_id: Id<GuildMarker>,
     lang: &str,
     session_id: i32,
     room_id: i32,
 ) -> BotResult<InteractionResponse> {
-    let questions_with_inputs = questions_with_inputs_for_room(state, guild_id, room_id).await?;
-    let dropdown_qs: Vec<&QuestionWithInput> = questions_with_inputs
-        .iter()
-        .filter(|q| matches!(q.input, QuestionInput::Dropdown(_)))
-        .collect();
-
-    if !dropdown_qs.is_empty() {
-        let existing = get_dropdown_answers(&state.rental_states, session_id);
-        Ok(build_dropdown_selection_message(
-            state,
-            lang,
-            session_id,
-            room_id,
-            &dropdown_qs,
-            &existing,
-        ))
-    } else {
-        let simple_questions: Vec<String> = questions_with_inputs
-            .iter()
-            .map(|q| q.text.clone())
-            .collect();
-        Ok(build_purpose_modal(
-            state,
-            lang,
-            session_id,
-            room_id,
-            &simple_questions,
-        ))
-    }
+    let questions = questions_with_inputs_for_room(state, guild_id, room_id).await?;
+    Ok(build_unified_modal(
+        state, lang, session_id, room_id, &questions,
+    ))
 }
 
-fn answer_template(questions: &[String], answer_prefix: &str) -> String {
-    questions
-        .iter()
-        .enumerate()
-        .map(|(index, question)| format!("{}. {question}\n{answer_prefix}: ", index + 1))
-        .collect::<Vec<_>>()
-        .join("\n\n")
+/// Build the content + components for the message posted when a user joins a rental VC:
+/// a single "answer" button that opens the unified question modal. A button is required
+/// because modals can only be opened from an interaction, not a gateway event.
+pub fn build_join_answer_button(
+    state: &AppState,
+    lang: &str,
+    user_id: Id<UserMarker>,
+    session_id: i32,
+    room_id: i32,
+) -> (String, Vec<Component>) {
+    let prompt = state.i18n.get(lang, &MessageKey::BotRentalRequestStart);
+    let button_label = state.i18n.get(lang, &MessageKey::RentAnswerButtonLabel);
+    let content = format!("<@{}>\n{}", user_id.get(), prompt);
+
+    let components = vec![Component::ActionRow(ActionRow {
+        id: None,
+        components: vec![Component::Button(Button {
+            id: None,
+            custom_id: Some(format!("answer:{session_id}:{room_id}")),
+            disabled: false,
+            emoji: None,
+            label: Some(button_label),
+            style: ButtonStyle::Primary,
+            url: None,
+            sku_id: None,
+        })],
+    })];
+
+    (content, components)
 }
 
 pub(crate) async fn questions_with_inputs_for_room(
@@ -333,34 +259,13 @@ pub async fn start_rental(
         if existing.state == rental_sessions::STATE_AWAITING_PURPOSE && has_pending_state {
             let questions_with_inputs =
                 questions_with_inputs_for_room(&state, guild_id, existing.room_id).await?;
-            let dropdown_qs: Vec<&QuestionWithInput> = questions_with_inputs
-                .iter()
-                .filter(|q| matches!(q.input, QuestionInput::Dropdown(_)))
-                .collect();
-
-            let response = if !dropdown_qs.is_empty() {
-                let existing_answers = get_dropdown_answers(&state.rental_states, existing.id);
-                build_dropdown_selection_message(
-                    &state,
-                    lang,
-                    existing.id,
-                    existing.room_id,
-                    &dropdown_qs,
-                    &existing_answers,
-                )
-            } else {
-                let simple_questions: Vec<String> = questions_with_inputs
-                    .iter()
-                    .map(|q| q.text.clone())
-                    .collect();
-                build_purpose_modal(
-                    &state,
-                    lang,
-                    existing.id,
-                    existing.room_id,
-                    &simple_questions,
-                )
-            };
+            let response = build_unified_modal(
+                &state,
+                lang,
+                existing.id,
+                existing.room_id,
+                &questions_with_inputs,
+            );
 
             return Ok(StartRentalResult::AwaitingQuestions {
                 session_id: existing.id,
@@ -478,33 +383,12 @@ pub async fn start_rental(
                 session_id: session.id,
                 host_user_id: user_id.get(),
                 timeout_task: timeout,
-                dropdown_answers: vec![None; 10],
             },
             room_id,
         },
     );
 
-    let dropdown_qs: Vec<&QuestionWithInput> = questions_with_inputs
-        .iter()
-        .filter(|q| matches!(q.input, QuestionInput::Dropdown(_)))
-        .collect();
-
-    let response = if !dropdown_qs.is_empty() {
-        build_dropdown_selection_message(
-            &state,
-            lang,
-            session.id,
-            room_id,
-            &dropdown_qs,
-            &vec![None; 10],
-        )
-    } else {
-        let simple_questions: Vec<String> = questions_with_inputs
-            .iter()
-            .map(|q| q.text.clone())
-            .collect();
-        build_purpose_modal(&state, lang, session.id, room_id, &simple_questions)
-    };
+    let response = build_unified_modal(&state, lang, session.id, room_id, &questions_with_inputs);
 
     Ok(StartRentalResult::AwaitingQuestions {
         session_id: session.id,

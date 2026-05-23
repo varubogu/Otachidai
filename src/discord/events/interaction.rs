@@ -4,7 +4,7 @@ use crate::error::BotResult;
 use crate::facade::question_preset::{self, QuestionInput};
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
-use crate::rental::state_machine::{find_vc_for_session, get_dropdown_answers};
+use crate::rental::state_machine::find_vc_for_session;
 use crate::rental::{flow as rental_flow, handoff, state_machine::RentalState};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -381,8 +381,8 @@ async fn handle_component(
         return Ok(());
     }
 
-    // rental_start:{session_id}:{room_id} (handoff re-enter button)
-    if let Some(rest) = data.custom_id.strip_prefix("rental_start:") {
+    // answer:{session_id}:{room_id} — open the unified question modal
+    if let Some(rest) = data.custom_id.strip_prefix("answer:") {
         let parts: Vec<&str> = rest.splitn(2, ':').collect();
         if parts.len() == 2
             && let (Ok(session_id), Ok(room_id)) =
@@ -390,7 +390,7 @@ async fn handle_component(
         {
             let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
             let response = if is_pending_rental_host(&state, session_id, user_id.get()) {
-                rental_flow::build_purpose_modal_for_room(
+                rental_flow::build_unified_modal_for_room(
                     &state, guild_id, &lang, session_id, room_id,
                 )
                 .await
@@ -408,117 +408,6 @@ async fn handle_component(
                         ..Default::default()
                     }),
                 }
-            };
-
-            state
-                .http
-                .interaction(state.application_id)
-                .create_response(interaction.id, &interaction.token, &response)
-                .await?;
-        }
-        return Ok(());
-    }
-
-    // dqa:{session_id}:{q_index} — dropdown answer selection
-    if let Some(rest) = data.custom_id.strip_prefix("dqa:") {
-        let parts: Vec<&str> = rest.splitn(2, ':').collect();
-        if parts.len() == 2
-            && let (Ok(session_id), Ok(q_index)) =
-                (parts[0].parse::<i32>(), parts[1].parse::<usize>())
-        {
-            let selected = data.values.first().cloned().unwrap_or_default();
-
-            let vc_id = find_vc_for_session(&state.rental_states, session_id);
-            let key = (guild_id.get(), vc_id);
-            if let Some(mut entry) = state.rental_states.get_mut(&key) {
-                if let RentalState::AwaitingPurpose {
-                    ref mut dropdown_answers,
-                    ..
-                } = entry.state
-                {
-                    if q_index < dropdown_answers.len() {
-                        dropdown_answers[q_index] = Some(selected);
-                    }
-                }
-            }
-
-            // Acknowledge silently; the message stays as-is.
-            state
-                .http
-                .interaction(state.application_id)
-                .create_response(
-                    interaction.id,
-                    &interaction.token,
-                    &InteractionResponse {
-                        kind: InteractionResponseType::DeferredUpdateMessage,
-                        data: None,
-                    },
-                )
-                .await?;
-        }
-        return Ok(());
-    }
-
-    // dqc:{session_id}:{room_id} — dropdown confirm button
-    if let Some(rest) = data.custom_id.strip_prefix("dqc:") {
-        let parts: Vec<&str> = rest.splitn(2, ':').collect();
-        if parts.len() == 2
-            && let (Ok(session_id), Ok(room_id)) =
-                (parts[0].parse::<i32>(), parts[1].parse::<i32>())
-        {
-            let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
-            let vc_id = find_vc_for_session(&state.rental_states, session_id);
-            let dropdown_answers = get_dropdown_answers(&state.rental_states, session_id);
-
-            let questions_with_inputs =
-                rental_flow::questions_with_inputs_for_room(&state, guild_id, room_id)
-                    .await
-                    .unwrap_or_default();
-
-            let text_qs: Vec<&crate::facade::question_preset::QuestionWithInput> =
-                questions_with_inputs
-                    .iter()
-                    .filter(|q| matches!(q.input, QuestionInput::Text))
-                    .collect();
-
-            let response = if text_qs.is_empty() {
-                // No text questions: assemble purpose from dropdown answers only and assign.
-                let answer_prefix = state.i18n.get(&lang, &MessageKey::BotRentalAnswerPrefix);
-                let purpose = rental_flow::assemble_purpose_from_parts(
-                    &questions_with_inputs,
-                    &dropdown_answers,
-                    &HashMap::new(),
-                    &answer_prefix,
-                );
-                let msg = rental_flow::submit_purpose(
-                    state.clone(),
-                    guild_id,
-                    user_id,
-                    session_id,
-                    purpose,
-                    vc_id,
-                    &lang,
-                )
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!("{e}");
-                    "Error".to_string()
-                });
-
-                InteractionResponse {
-                    kind: InteractionResponseType::UpdateMessage,
-                    data: Some(InteractionResponseData {
-                        content: Some(msg),
-                        components: Some(vec![]),
-                        flags: Some(MessageFlags::EPHEMERAL),
-                        ..Default::default()
-                    }),
-                }
-            } else {
-                // Show modal for text questions.
-                rental_flow::build_text_questions_modal(
-                    &state, &lang, session_id, room_id, &text_qs,
-                )
             };
 
             state
@@ -600,38 +489,45 @@ async fn handle_modal(
             let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
             let vc_id = find_vc_for_session(&state.rental_states, session_id);
 
-            // Detect modal style: old (single purpose_text) vs new (per-question qt_{index})
-            let purpose = if let Some(text) = find_in_components(&data.components, "purpose_text") {
-                // Old-style: free-form text template
-                text
-            } else {
-                // New-style: individual TextInputs for text questions after dropdown phase
-                let dropdown_answers = get_dropdown_answers(&state.rental_states, session_id);
-                let questions_with_inputs =
-                    rental_flow::questions_with_inputs_for_room(&state, guild_id, room_id)
-                        .await
-                        .unwrap_or_default();
+            // The unified modal submits every answer at once. Each input is keyed `mq_{index}`:
+            // select menus carry their chosen value, text inputs their typed value.
+            let mut submitted: HashMap<String, String> = HashMap::new();
+            for component in &data.components {
+                collect_modal_value(component, &mut submitted);
+            }
 
-                let mut text_answers: HashMap<usize, String> = HashMap::new();
-                for q in &questions_with_inputs {
-                    if matches!(q.input, QuestionInput::Text) {
-                        let custom_id = format!("qt_{}", q.index);
-                        if let Some(val) = find_in_components(&data.components, &custom_id) {
-                            if !val.is_empty() {
-                                text_answers.insert(q.index, val);
-                            }
-                        }
+            let questions_with_inputs =
+                rental_flow::questions_with_inputs_for_room(&state, guild_id, room_id)
+                    .await
+                    .unwrap_or_default();
+
+            let mut dropdown_answers: Vec<Option<String>> = vec![None; 10];
+            let mut text_answers: HashMap<usize, String> = HashMap::new();
+            for q in &questions_with_inputs {
+                let Some(value) = submitted.get(&format!("mq_{}", q.index)) else {
+                    continue;
+                };
+                if value.is_empty() {
+                    continue;
+                }
+                match q.input {
+                    QuestionInput::Dropdown(_) if q.index < dropdown_answers.len() => {
+                        dropdown_answers[q.index] = Some(value.clone());
+                    }
+                    QuestionInput::Dropdown(_) => {}
+                    QuestionInput::Text => {
+                        text_answers.insert(q.index, value.clone());
                     }
                 }
+            }
 
-                let answer_prefix = state.i18n.get(&lang, &MessageKey::BotRentalAnswerPrefix);
-                rental_flow::assemble_purpose_from_parts(
-                    &questions_with_inputs,
-                    &dropdown_answers,
-                    &text_answers,
-                    &answer_prefix,
-                )
-            };
+            let answer_prefix = state.i18n.get(&lang, &MessageKey::BotRentalAnswerPrefix);
+            let purpose = rental_flow::assemble_purpose_from_parts(
+                &questions_with_inputs,
+                &dropdown_answers,
+                &text_answers,
+                &answer_prefix,
+            );
 
             let msg = rental_flow::submit_purpose(
                 state.clone(),
@@ -669,6 +565,8 @@ async fn handle_modal(
     Ok(())
 }
 
+/// True when `session_id` has an in-memory `AwaitingPurpose` entry hosted by `user_id`.
+/// Guards the answer modal so only the rental host can fill it in.
 fn is_pending_rental_host(state: &AppState, session_id: i32, user_id: u64) -> bool {
     state.rental_states.iter().any(|entry| {
         matches!(
@@ -682,24 +580,27 @@ fn is_pending_rental_host(state: &AppState, session_id: i32, user_id: u64) -> bo
     })
 }
 
-fn find_in_components(components: &[ModalInteractionComponent], custom_id: &str) -> Option<String> {
-    use twilight_model::application::interaction::modal::ModalInteractionActionRow;
-    for component in components {
-        match component {
-            ModalInteractionComponent::TextInput(ti) if ti.custom_id == custom_id => {
-                return Some(ti.value.clone());
-            }
-            ModalInteractionComponent::ActionRow(ModalInteractionActionRow {
-                components, ..
-            }) => {
-                if let Some(val) = find_in_components(components, custom_id) {
-                    return Some(val);
-                }
-            }
-            _ => {}
+/// Recursively collect each input's submitted value from a modal component tree, keyed by
+/// custom id. Text inputs contribute their `value`; string selects their first chosen value.
+/// `Label` and `ActionRow` are layout wrappers we descend into.
+fn collect_modal_value(component: &ModalInteractionComponent, out: &mut HashMap<String, String>) {
+    match component {
+        ModalInteractionComponent::TextInput(ti) => {
+            out.insert(ti.custom_id.clone(), ti.value.clone());
         }
+        ModalInteractionComponent::StringSelect(select) => {
+            if let Some(value) = select.values.first() {
+                out.insert(select.custom_id.clone(), value.clone());
+            }
+        }
+        ModalInteractionComponent::Label(label) => collect_modal_value(&label.component, out),
+        ModalInteractionComponent::ActionRow(action_row) => {
+            for inner in &action_row.components {
+                collect_modal_value(inner, out);
+            }
+        }
+        _ => {}
     }
-    None
 }
 
 fn interaction_user_id(interaction: &Interaction) -> Id<UserMarker> {
