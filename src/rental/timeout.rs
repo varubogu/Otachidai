@@ -49,13 +49,15 @@ async fn handle_purpose_timeout(
     with_guild_context(&state.db.guild, guild_id, |txn| {
         Box::pin(async move {
             rental_facade::release_session(txn, session_id).await?;
-            if task_id != 0 {
-                rental_facade::mark_task_processed(txn, task_id).await?;
-            }
             crate::facade::room::set_room_availability(txn, room_id, true).await
         })
     })
     .await?;
+
+    // `scheduled_tasks` is in the worker schema — UPDATE requires the system role.
+    if task_id != 0 {
+        rental_facade::mark_task_processed(&state.db.system, task_id).await?;
+    }
 
     state.rental_states.remove(&(guild_id, voice_channel_id));
 
@@ -210,16 +212,19 @@ async fn restore_fire(
         .unwrap_or(false);
     let room_id = session.as_ref().map(|s| s.room_id);
 
-    with_guild_context(&state.db.guild, guild_id, |txn| {
-        Box::pin(async move {
-            if still_awaiting {
+    if still_awaiting {
+        with_guild_context(&state.db.guild, guild_id, |txn| {
+            Box::pin(async move {
                 rental_facade::release_session(txn, session_id).await?;
                 if let Some(room_id) = room_id {
                     crate::facade::room::set_room_availability(txn, room_id, true).await?;
                 }
-            }
-            rental_facade::mark_task_processed(txn, task_id).await
+                Ok(())
+            })
         })
-    })
-    .await
+        .await?;
+    }
+
+    // `scheduled_tasks` is in the worker schema — UPDATE requires the system role.
+    rental_facade::mark_task_processed(&state.db.system, task_id).await
 }

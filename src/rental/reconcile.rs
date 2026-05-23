@@ -166,9 +166,11 @@ async fn release(
     with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
             rental_facade::release_session(txn, session_id).await?;
-            rental_facade::mark_session_tasks_processed(txn, session_id).await?;
             room_facade::set_room_availability(txn, room_id, true).await
         })
     })
-    .await
+    .await?;
+
+    // `scheduled_tasks` is in the worker schema — UPDATE requires the system role.
+    rental_facade::mark_session_tasks_processed(&state.db.system, session_id).await
 }

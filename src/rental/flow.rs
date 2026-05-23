@@ -428,13 +428,13 @@ pub async fn submit_purpose(
 
     with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         let purpose_clone = purpose.clone();
-        Box::pin(async move {
-            rental_facade::set_purpose(txn, session_id, purpose_clone).await?;
-            rental_facade::mark_session_tasks_processed(txn, session_id).await?;
-            Ok(())
-        })
+        Box::pin(async move { rental_facade::set_purpose(txn, session_id, purpose_clone).await })
     })
     .await?;
+
+    // `scheduled_tasks` lives in the `worker` schema where the guild role only has
+    // SELECT/INSERT. UPDATE is the system role's job (see CLAUDE.md / grant_permissions).
+    rental_facade::mark_session_tasks_processed(&state.db.system, session_id).await?;
 
     let session = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
         Box::pin(async move {
