@@ -83,6 +83,24 @@ pub async fn set_purpose<C: ConnectionTrait>(
     model.update(db).await.map_err(BotError::from)
 }
 
+/// Reassign a pending rental session to a different room. Used when the rental modal's
+/// VC dropdown picks a room different from the one originally allocated.
+pub async fn set_session_room<C: ConnectionTrait>(
+    db: &C,
+    session_id: i32,
+    new_room_id: i32,
+) -> BotResult<()> {
+    let session = rental_sessions::Entity::find_by_id(session_id)
+        .one(db)
+        .await?
+        .ok_or_else(|| BotError::NotFound(format!("session {session_id}")))?;
+
+    let mut model: rental_sessions::ActiveModel = session.into();
+    model.room_id = Set(new_room_id);
+    model.update(db).await?;
+    Ok(())
+}
+
 pub async fn release_session<C: ConnectionTrait>(db: &C, session_id: i32) -> BotResult<()> {
     let session = rental_sessions::Entity::find_by_id(session_id)
         .one(db)

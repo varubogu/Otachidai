@@ -156,6 +156,37 @@ pub async fn find_available_room<C: ConnectionTrait>(
     Ok(None)
 }
 
+/// List every room in the guild that currently has no active rental session.
+pub async fn list_available_rooms<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+) -> BotResult<Vec<rooms::Model>> {
+    let rooms = rooms::Entity::find()
+        .filter(rooms::Column::GuildId.eq(guild_id as i64))
+        .order_by_asc(rooms::Column::Id)
+        .all(db)
+        .await?;
+
+    let mut result = Vec::new();
+    for room in rooms {
+        let active_session = rental_facade::find_active_session_for_room(db, room.id).await?;
+        if active_session.is_none() {
+            result.push(room);
+        }
+    }
+    Ok(result)
+}
+
+pub async fn find_room_by_id<C: ConnectionTrait>(
+    db: &C,
+    room_id: i32,
+) -> BotResult<Option<rooms::Model>> {
+    rooms::Entity::find_by_id(room_id)
+        .one(db)
+        .await
+        .map_err(BotError::from)
+}
+
 pub async fn list_rooms<C: ConnectionTrait>(db: &C, guild_id: u64) -> BotResult<Vec<rooms::Model>> {
     rooms::Entity::find()
         .filter(rooms::Column::GuildId.eq(guild_id as i64))

@@ -390,8 +390,18 @@ async fn handle_component(
         {
             let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
             let response = if is_pending_rental_host(&state, session_id, user_id.get()) {
+                let include_vc_question = !rental_flow::user_is_in_room(
+                    &state, guild_id, user_id, room_id,
+                )
+                .await
+                .unwrap_or(false);
                 rental_flow::build_unified_modal_for_room(
-                    &state, guild_id, &lang, session_id, room_id,
+                    &state,
+                    guild_id,
+                    &lang,
+                    session_id,
+                    room_id,
+                    include_vc_question,
                 )
                 .await
                 .unwrap_or_else(|e| {
@@ -496,6 +506,13 @@ async fn handle_modal(
                 collect_modal_value(component, &mut submitted);
             }
 
+            // The system VC dropdown (custom_id = MODAL_VC_CUSTOM_ID) carries the room id
+            // the user picked. Absent when the modal omitted the question because the
+            // user was already in the rental VC.
+            let selected_room_id: Option<i32> = submitted
+                .remove(rental_flow::MODAL_VC_CUSTOM_ID)
+                .and_then(|v| v.parse::<i32>().ok());
+
             let questions_with_inputs =
                 rental_flow::questions_with_inputs_for_room(&state, guild_id, room_id)
                     .await
@@ -537,6 +554,7 @@ async fn handle_modal(
                 purpose,
                 vc_id,
                 &lang,
+                selected_room_id,
             )
             .await
             .unwrap_or_else(|e| {
