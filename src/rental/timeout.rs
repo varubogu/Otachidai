@@ -41,10 +41,37 @@ async fn handle_purpose_timeout(
     session_id: i32,
     task_id: i32,
 ) -> crate::error::BotResult<()> {
-    let room_id = with_guild_context(&state.db.guild, guild_id, |txn| {
-        Box::pin(async move { get_room_id_for_session(txn, session_id).await })
+    use crate::entities::rental_sessions;
+
+    // Skip work for sessions that are no longer pending (the user cancelled by leaving
+    // the VC, or already submitted their purpose). Without this guard, a stale in-memory
+    // timer that escaped abort would erroneously fire a "did not submit" report and
+    // could clobber an unrelated newer rental sitting at the same VC key.
+    let session = with_guild_context(&state.db.guild, guild_id, |txn| {
+        Box::pin(async move {
+            rental_sessions::Entity::find_by_id(session_id)
+                .one(txn)
+                .await
+                .map_err(crate::error::BotError::from)
+        })
     })
     .await?;
+
+    let Some(session) = session else {
+        if task_id != 0 {
+            rental_facade::mark_task_processed(&state.db.system, task_id).await?;
+        }
+        return Ok(());
+    };
+
+    if session.state != rental_sessions::STATE_AWAITING_PURPOSE {
+        if task_id != 0 {
+            rental_facade::mark_task_processed(&state.db.system, task_id).await?;
+        }
+        return Ok(());
+    }
+
+    let room_id = session.room_id;
 
     with_guild_context(&state.db.guild, guild_id, |txn| {
         Box::pin(async move {
@@ -59,7 +86,13 @@ async fn handle_purpose_timeout(
         rental_facade::mark_task_processed(&state.db.system, task_id).await?;
     }
 
-    state.rental_states.remove(&(guild_id, voice_channel_id));
+    // Only remove the state entry if it still belongs to this session. A newer rental
+    // started after cancellation can sit at the same (guild, vc) key.
+    state
+        .rental_states
+        .remove_if(&(guild_id, voice_channel_id), |_, entry| {
+            entry.session_id() == session_id
+        });
 
     let lang = resolve_language(state, Id::<GuildMarker>::new(guild_id), None).await;
 
@@ -83,19 +116,6 @@ async fn handle_purpose_timeout(
             .await?;
     }
     Ok(())
-}
-
-async fn get_room_id_for_session<C: sea_orm::ConnectionTrait>(
-    db: &C,
-    session_id: i32,
-) -> crate::error::BotResult<i32> {
-    use crate::entities::rental_sessions;
-    rental_sessions::Entity::find_by_id(session_id)
-        .one(db)
-        .await
-        .map_err(crate::error::BotError::from)?
-        .map(|s| s.room_id)
-        .ok_or_else(|| crate::error::BotError::NotFound(format!("session {session_id}")))
 }
 
 pub fn spawn_handoff_timeout(

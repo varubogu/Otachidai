@@ -790,6 +790,11 @@ pub async fn release_rental(
     })
     .await?;
 
+    // Retire the matching scheduled_tasks row so the timer can never resurrect after a
+    // restart (`restore_pending_timeouts`). Without this, a cancelled rental's DB-side
+    // task would re-spawn on the next boot and may race with a newer rental.
+    rental_facade::mark_session_tasks_processed(&state.db.system, session_id).await?;
+
     state.rental_states.remove(&key);
 
     crate::rental::status::trigger(&state, guild_id.get());
