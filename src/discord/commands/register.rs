@@ -30,6 +30,15 @@ pub async fn register_global_commands(
         )
         .build(),
         CommandBuilder::new(
+            "register_room_list_channel",
+            "Register the channel where the room list (status board) is posted",
+            CommandType::ChatInput,
+        )
+        .option(
+            ChannelBuilder::new("channel", "The channel to post the room list in").required(true),
+        )
+        .build(),
+        CommandBuilder::new(
             "register_question_preset",
             "Register rental questions preset",
             CommandType::ChatInput,

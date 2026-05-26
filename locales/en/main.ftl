@@ -31,6 +31,7 @@ status-no-rooms = No rooms are registered yet.
 ## Admin commands
 admin-report-channel-registered = Report channel registered: { $channel }
 admin-rental-button-registered = Rental button channel registered. Button posted in { $channel }.
+admin-room-list-channel-registered = Room list channel registered. Room list will be posted in { $channel }.
 admin-question-preset-saved = Question preset saved.
 admin-question-preset-name-required = Please specify a preset name.
 admin-question-preset-at-least-one = Specify at least one of question_1 through question_10.
@@ -65,6 +66,7 @@ help-user = **User Commands**
 help-admin = **Admin Commands**
     `/register_report_channel` — Register the channel for timeout notifications
     `/register_rental_button_channel` — Register the channel where the rental button is posted
+    `/register_room_list_channel` — Register the channel where the room list (status board) is posted
     `/register_question_preset` — Register or update a question preset for rooms
     `/list_question_presets` — List registered question presets
     `/delete_question_preset` — Delete a question preset

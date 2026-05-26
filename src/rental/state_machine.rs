@@ -67,4 +67,3 @@ pub fn find_vc_for_session(states: &RentalStateMap, session_id: i32) -> u64 {
     }
     0
 }
-

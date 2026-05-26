@@ -1,4 +1,6 @@
-use crate::entities::guild_channels::{self, CHANNEL_TYPE_RENTAL_BUTTON, CHANNEL_TYPE_REPORT};
+use crate::entities::guild_channels::{
+    self, CHANNEL_TYPE_RENTAL_BUTTON, CHANNEL_TYPE_REPORT, CHANNEL_TYPE_ROOM_LIST,
+};
 use crate::entities::guilds;
 use crate::error::{BotError, BotResult};
 use sea_orm::{
@@ -77,26 +79,34 @@ pub async fn get_rental_button_channel<C: ConnectionTrait>(
     get_channel(db, guild_id, CHANNEL_TYPE_RENTAL_BUTTON).await
 }
 
-pub async fn get_rental_button_channel_row<C: ConnectionTrait>(
+pub async fn set_room_list_channel<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+    channel_id: u64,
+) -> BotResult<()> {
+    upsert_channel(db, guild_id, channel_id, CHANNEL_TYPE_ROOM_LIST).await
+}
+
+pub async fn get_room_list_channel_row<C: ConnectionTrait>(
     db: &C,
     guild_id: u64,
 ) -> BotResult<Option<guild_channels::Model>> {
     guild_channels::Entity::find()
         .filter(guild_channels::Column::GuildId.eq(guild_id as i64))
-        .filter(guild_channels::Column::ChannelType.eq(CHANNEL_TYPE_RENTAL_BUTTON))
+        .filter(guild_channels::Column::ChannelType.eq(CHANNEL_TYPE_ROOM_LIST))
         .one(db)
         .await
         .map_err(BotError::from)
 }
 
-pub async fn set_rental_button_message_id<C: ConnectionTrait>(
+pub async fn set_room_list_message_id<C: ConnectionTrait>(
     db: &C,
     guild_id: u64,
     message_id: Option<u64>,
 ) -> BotResult<()> {
     let existing = guild_channels::Entity::find()
         .filter(guild_channels::Column::GuildId.eq(guild_id as i64))
-        .filter(guild_channels::Column::ChannelType.eq(CHANNEL_TYPE_RENTAL_BUTTON))
+        .filter(guild_channels::Column::ChannelType.eq(CHANNEL_TYPE_ROOM_LIST))
         .one(db)
         .await?;
     if let Some(existing) = existing {

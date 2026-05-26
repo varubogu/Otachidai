@@ -63,12 +63,12 @@ async fn refresh_guild_board(
     sessions: &[rental_sessions::Model],
 ) -> BotResult<()> {
     let row = with_guild_context(&state.db.guild, guild_id, |txn| {
-        Box::pin(async move { guild_settings::get_rental_button_channel_row(txn, guild_id).await })
+        Box::pin(async move { guild_settings::get_room_list_channel_row(txn, guild_id).await })
     })
     .await?;
 
     let Some(row) = row else {
-        // Rental button channel is not configured; nothing to display.
+        // Room list channel is not configured; nothing to display.
         return Ok(());
     };
     let channel_id = Id::<ChannelMarker>::new(row.channel_id as u64);
@@ -87,7 +87,7 @@ async fn refresh_guild_board(
     if Some(new_id) != stored {
         with_guild_context(&state.db.guild, guild_id, |txn| {
             Box::pin(async move {
-                guild_settings::set_rental_button_message_id(txn, guild_id, Some(new_id)).await
+                guild_settings::set_room_list_message_id(txn, guild_id, Some(new_id)).await
             })
         })
         .await?;

@@ -8,5 +8,6 @@ pub mod register_question_preset;
 pub mod register_rental_button_channel;
 pub mod register_report_channel;
 pub mod register_room;
+pub mod register_room_list_channel;
 pub mod set_room_group;
 pub mod set_room_preset;

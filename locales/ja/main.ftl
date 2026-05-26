@@ -31,6 +31,7 @@ status-no-rooms = まだ部屋が登録されていません。
 ## 管理者コマンド
 admin-report-channel-registered = レポートチャンネルを登録しました: { $channel }
 admin-rental-button-registered = レンタルボタンチャンネルを登録しました。{ $channel } にボタンを投稿しました。
+admin-room-list-channel-registered = 部屋一覧チャンネルを登録しました。{ $channel } に部屋一覧を投稿します。
 admin-question-preset-saved = 質問プリセットを保存しました。
 admin-question-preset-name-required = プリセット名を指定してください。
 admin-question-preset-at-least-one = question_1 ～ question_10 のいずれかを指定してください。
@@ -65,6 +66,7 @@ help-user = **ユーザーコマンド**
 help-admin = **管理者コマンド**
     `/register_report_channel` — タイムアウト通知チャンネルを登録する
     `/register_rental_button_channel` — レンタルボタンを投稿するチャンネルを登録する
+    `/register_room_list_channel` — 部屋一覧（ステータスボード）を投稿するチャンネルを登録する
     `/register_question_preset` — 部屋ごとの質問プリセットを登録・変更する
     `/list_question_presets` — 登録済みの質問プリセットを一覧表示する
     `/delete_question_preset` — 質問プリセットを削除する

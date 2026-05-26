@@ -1,6 +1,6 @@
 use sea_orm::entity::prelude::*;
 
-/// channel_type: 1 = report channel, 2 = rental button channel
+/// channel_type: 1 = report channel, 2 = rental button channel, 3 = room list (status board) channel
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "guild_channels", schema_name = "guild_master")]
 pub struct Model {
@@ -33,3 +33,4 @@ impl ActiveModelBehavior for ActiveModel {}
 
 pub const CHANNEL_TYPE_REPORT: i16 = 1;
 pub const CHANNEL_TYPE_RENTAL_BUTTON: i16 = 2;
+pub const CHANNEL_TYPE_ROOM_LIST: i16 = 3;
