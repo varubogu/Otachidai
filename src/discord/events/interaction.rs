@@ -90,7 +90,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "register_rental_button_channel" => {
             let msg = crate::discord::commands::admin::register_rental_button_channel::handle(
@@ -104,7 +104,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "register_room_list_channel" => {
             let msg = crate::discord::commands::admin::register_room_list_channel::handle(
@@ -118,7 +118,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "register_question_preset" => {
             let msg = crate::discord::commands::admin::register_question_preset::handle(
@@ -132,7 +132,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "list_question_presets" => {
             let msg = crate::discord::commands::admin::list_question_presets::handle(
@@ -145,7 +145,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "delete_question_preset" => {
             let msg = crate::discord::commands::admin::delete_question_preset::handle(
@@ -159,7 +159,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "register_room" => {
             let msg = crate::discord::commands::admin::register_room::handle(
@@ -173,7 +173,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "delete_room" => {
             let msg = crate::discord::commands::admin::delete_room::handle(
@@ -187,7 +187,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "list_rooms" => {
             let msg =
@@ -197,7 +197,7 @@ async fn handle_command(
                         tracing::error!("{e}");
                         "Error".to_string()
                     });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "register_group" => {
             let msg = crate::discord::commands::admin::register_group::handle(
@@ -211,7 +211,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "delete_group" => {
             let msg = crate::discord::commands::admin::delete_group::handle(
@@ -225,7 +225,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "set_room_group" => {
             let msg = crate::discord::commands::admin::set_room_group::handle(
@@ -239,7 +239,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "set_room_preset" => {
             let msg = crate::discord::commands::admin::set_room_preset::handle(
@@ -253,7 +253,7 @@ async fn handle_command(
                 tracing::error!("{e}");
                 "Error".to_string()
             });
-            simple_response(&msg)
+            ephemeral_response(&msg)
         }
         "rent" => {
             crate::discord::commands::user::rent::handle(state.clone(), guild_id, user_id, &lang)
@@ -668,6 +668,17 @@ fn simple_response(content: &str) -> InteractionResponse {
         kind: InteractionResponseType::ChannelMessageWithSource,
         data: Some(InteractionResponseData {
             content: Some(content.to_string()),
+            ..Default::default()
+        }),
+    }
+}
+
+fn ephemeral_response(content: &str) -> InteractionResponse {
+    InteractionResponse {
+        kind: InteractionResponseType::ChannelMessageWithSource,
+        data: Some(InteractionResponseData {
+            content: Some(content.to_string()),
+            flags: Some(MessageFlags::EPHEMERAL),
             ..Default::default()
         }),
     }
