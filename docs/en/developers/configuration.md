@@ -9,6 +9,7 @@ otachidai Bot reads configuration from three layers.
 | **Locale files** | `locales/{lang}/main.ftl` | Developer | Entire bot process |
 
 This document focuses on **file formats** (environment variables and locale files). DB-backed settings are described by schema and update paths only.
+Server admins maintain DB settings by uploading a single YAML via `/upload_guild_config`. The YAML schema itself is covered in [Server Admins: Guild Config YAML](../server-admins/guild-config-yaml.md).
 
 ---
 
@@ -67,15 +68,19 @@ Optional values fall back through `std::env::var().unwrap_or_else(...)`.
 
 ## Server-Specific Settings in DB
 
-Guild-scoped settings are changed by server admins through slash commands. Bot operators do not need to edit SQL directly.
+Guild-scoped settings are changed by server admins through a single full-replacement YAML upload via `/upload_guild_config`. Bot operators do not need to edit SQL directly.
 The schema is under `guild_master`.
 
-| Table | Contents | Update command |
+| Table | Contents | Update path |
 |---|---|---|
-| `guilds` | Basic guild settings such as language | No command currently. Inserted automatically by `ensure_guild` |
-| `guild_channels` | Report channel and rental button channel | `/register_report_channel`, `/register_rental_button_channel` |
-| `rooms` | Rentable rooms | `/register_room`, `/delete_room` |
-| `rental_question_presets` | Per-room question presets | `/register_question_preset` |
+| `guilds` | Basic guild settings such as language | Inserted by `ensure_guild`; `language` updated from YAML `guild.language` |
+| `guild_channels` | Report, rental button, room list, and auto-post fallback channels | YAML `channels.*` |
+| `room_groups` | Room groups and their text channels | YAML `room_groups[]` |
+| `rooms` | Rentable rooms | YAML `rooms[]` |
+| `rental_question_presets` | Per-room question presets | YAML `question_presets[]` |
+| `rental_routing_rules` | Routing rules for the auto-post | YAML `routing_rules[]` |
+
+Full replacement semantics: `/upload_guild_config` `DELETE`s and re-`INSERT`s these tables inside a single transaction. Anything missing from the YAML is wiped.
 
 ### `guilds`
 
@@ -94,10 +99,23 @@ The schema is under `guild_master`.
 | `id` | `SERIAL` PK | Internal ID |
 | `guild_id` | `BIGINT` | Discord guild ID |
 | `channel_id` | `BIGINT` | Discord channel ID |
-| `channel_type` | `SMALLINT` | `1=report channel` / `2=rental button channel` |
+| `channel_type` | `SMALLINT` | `1=report` / `2=rental button` / `3=room list` / `4=rental auto-post fallback` |
+| `message_id` | `BIGINT?` | Message ID for the room list message (only used with `channel_type=3`) |
+| `template` | `TEXT?` | Rendering template for the auto-post fallback (`channel_type=4`) |
 | `created_at` | `TIMESTAMPTZ` | Creation timestamp |
 
-`facade::guild_settings::upsert_channel` manages one row per `(guild_id, channel_type)`, so there is only one channel per type.
+One row per `(guild_id, channel_type)`, so there is only one channel per type.
+
+### `room_groups`
+
+| Column | Type | Contents |
+|---|---|---|
+| `id` | `SERIAL` PK | Internal ID |
+| `guild_id` | `BIGINT` | Discord guild ID |
+| `name` | `TEXT` | Group name, unique within the guild |
+| `channel_id` | `BIGINT` | Text channel ID associated with the group |
+| `message_id` | `BIGINT?` | Per-group status message ID |
+| `created_at` | `TIMESTAMPTZ` | Creation timestamp |
 
 ### `rooms`
 
@@ -109,9 +127,10 @@ The schema is under `guild_master`.
 | `voice_channel_id` | `BIGINT?` | Voice channel ID (optional) |
 | `is_available` | `BOOLEAN` | Availability flag. `false` while rented |
 | `question_preset_id` | `INT?` | Linked `rental_question_presets.id` |
+| `group_id` | `INT?` | Linked `room_groups.id` |
 | `created_at` | `TIMESTAMPTZ` | Creation timestamp |
 
-At least one of `text_channel_id` and `voice_channel_id` is expected to be set; command validation enforces this.
+In the YAML schema `voice_channel_id` is the required identifier for a room. `rental_sessions` and `scheduled_tasks` reference `rooms.id` with `ON DELETE CASCADE`, so they are automatically removed when `/upload_guild_config` performs its full replacement.
 
 ### `rental_question_presets`
 
@@ -121,9 +140,25 @@ At least one of `text_channel_id` and `voice_channel_id` is expected to be set; 
 | `guild_id` | `BIGINT` | Discord guild ID |
 | `name` | `TEXT` | Preset name, unique within the guild |
 | `question_1` through `question_10` | `TEXT?` | Question text. Empty strings and whitespace-only values are treated as invalid |
+| `answer_1` through `answer_10` | `TEXT?` | Dropdown options (`,` separates, `,,` is a literal comma) |
+| `routing_key_index` | `SMALLINT?` | 0-9 index of the question used for auto-post routing. At most one per preset |
 | `created_at` / `updated_at` | `TIMESTAMPTZ` | Creation and update timestamps |
 
-`Model::questions()` returns only non-empty elements as `Vec<String>`. Questions are displayed in this order during rental.
+The question selected by `routing_key_index` is expressed in YAML as `routing_key: true`. The "at most one per preset" constraint is enforced by `facade::guild_config::validate()`.
+
+### `rental_routing_rules`
+
+| Column | Type | Contents |
+|---|---|---|
+| `id` | `SERIAL` PK | Internal ID |
+| `guild_id` | `BIGINT` | Discord guild ID |
+| `preset_id` | `INT` | FK to `rental_question_presets.id` |
+| `match_value` | `TEXT` | Value matched against the routing-key question's chosen answer |
+| `channel_id` | `BIGINT` | Channel to post into when this rule matches |
+| `template` | `TEXT?` | Template string. When `NULL`, the i18n `BotRentalPostDefaultTemplate` is used |
+| `created_at` / `updated_at` | `TIMESTAMPTZ` | Creation and update timestamps |
+
+Unique on `(preset_id, match_value)` (YAML validation rejects duplicates). Template syntax is handled by `parse()` in `src/rental/template.rs` and accepts `{{ user }}`, `{{ room }}`, `{{ when }}`, `{{ preset }}`, `{{ q1 }}` through `{{ q10 }}`, `{{ answer:question text }}`, and `{{ answers }}`.
 
 ---
 
@@ -149,9 +184,11 @@ The `MessageKey` enum in `src/i18n/messages.rs` corresponds one-to-one with keys
 
 | Prefix | Purpose |
 |---|---|
-| `bot-rental-*` | User-facing rental flow strings |
+| `bot-rental-*` | User-facing rental flow strings (including the auto-post default template) |
 | `bot-handoff-*` | Handoff flow strings |
+| `bot-config-*` | YAML upload / download responses |
 | `admin-*` | Admin command responses |
+| `status-*` | Room list status message |
 | `error-*` | Error responses |
 | `help-*` | `/help` sections |
 | `rent-button-*` | Rental button labels |
@@ -163,13 +200,15 @@ Use `/add-i18n` when adding new keys. If editing manually, always update **both 
 Dynamic values use Fluent's `{ $name }` format. Code passes values through `FluentArgs` with `args.set("name", value)`.
 
 ```ftl
-admin-report-channel-registered = Report channel registered: { $channel }
+bot-rental-post-default-template = { $user } rented a room ({ $room }){"\n"}{ $answers }
 ```
 
 ```rust
 let mut args = FluentArgs::new();
-args.set("channel", format!("<#{channel_id}>"));
-state.i18n.get_with_args(lang, &MessageKey::AdminReportChannelRegistered, Some(&args));
+args.set("user", format!("<@{user_id}>"));
+args.set("room", room_mention);
+args.set("answers", assembled_purpose);
+state.i18n.get_with_args(lang, &MessageKey::BotRentalPostDefaultTemplate, Some(&args));
 ```
 
 ### Language Resolution Priority
@@ -190,4 +229,4 @@ BCP-47-like values such as `ja-JP` and `en_GB` are normalized by looking only at
 - [basic-design.md](basic-design.md) — bot concept and design principles
 - [architecture.md](architecture.md) — module layout and DB role separation
 - [command-specification.md](command-specification.md) — commands that modify DB settings
-- [Bot Operators: Setup](../bot-operators/setup.md) — environment variable setup examples
+- [Server Admins: Guild Config YAML](../server-admins/guild-config-yaml.md) — full YAML schema

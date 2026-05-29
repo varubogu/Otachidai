@@ -51,10 +51,7 @@ async fn handle_command(
 
     let is_admin_command = matches!(
         data.name.as_str(),
-        "upload_guild_config"
-            | "download_guild_config"
-            | "list_question_presets"
-            | "list_rooms"
+        "upload_guild_config" | "download_guild_config" | "list_question_presets" | "list_rooms"
     );
 
     if is_admin_command && !check_admin_permission(&interaction) {
@@ -405,11 +402,8 @@ async fn handle_modal(
             // If the rental committed, route the answers to the configured channel.
             // Failures here are logged and swallowed by `routing::post_purpose`.
             if posted {
-                let (answers_by_index, answers_by_name) = build_answer_lookups(
-                    &questions_with_inputs,
-                    &dropdown_answers,
-                    &text_answers,
-                );
+                let (answers_by_index, answers_by_name) =
+                    build_answer_lookups(&questions_with_inputs, &dropdown_answers, &text_answers);
                 crate::rental::routing::post_purpose(
                     &state,
                     crate::rental::routing::PostRequest {
@@ -454,7 +448,12 @@ fn build_answer_lookups(
     dropdown_answers: &[Option<String>],
     text_answers: &HashMap<usize, String>,
 ) -> (Vec<String>, HashMap<String, String>) {
-    let max_index = questions.iter().map(|q| q.index).max().map(|n| n + 1).unwrap_or(0);
+    let max_index = questions
+        .iter()
+        .map(|q| q.index)
+        .max()
+        .map(|n| n + 1)
+        .unwrap_or(0);
     let mut by_index: Vec<String> = vec![String::new(); max_index];
     let mut by_name: HashMap<String, String> = HashMap::new();
     for q in questions {

@@ -38,7 +38,11 @@ pub async fn handle(
         .as_ref()
         .and_then(|r| r.attachments.get(&attachment_id))
         .ok_or_else(|| {
-            BotError::Validation(state.i18n.get(lang, &MessageKey::BotConfigUploadErrorAttachment))
+            BotError::Validation(
+                state
+                    .i18n
+                    .get(lang, &MessageKey::BotConfigUploadErrorAttachment),
+            )
         })?;
 
     if attachment.size > MAX_YAML_BYTES {
@@ -81,9 +85,11 @@ pub async fn handle(
         Err(ConfigError::Yaml(s)) => {
             let mut args = FluentArgs::new();
             args.set("detail", s);
-            return Ok(state
-                .i18n
-                .get_with_args(lang, &MessageKey::BotConfigUploadErrorYaml, Some(&args)));
+            return Ok(state.i18n.get_with_args(
+                lang,
+                &MessageKey::BotConfigUploadErrorYaml,
+                Some(&args),
+            ));
         }
         Err(ConfigError::Validation(es)) => {
             let mut args = FluentArgs::new();
@@ -98,17 +104,16 @@ pub async fn handle(
 
     // 4) Apply within a guild-RLS transaction. Discover affected rooms first so we can
     //    notify their hosts after the commit.
-    let affected =
-        with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-            let config = config.clone();
-            Box::pin(async move {
-                let to_delete =
-                    guild_config::find_rooms_to_delete(txn, guild_id.get(), &config).await?;
-                guild_config::apply(txn, guild_id.get(), &config).await?;
-                Ok::<_, BotError>(to_delete)
-            })
+    let affected = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
+        let config = config.clone();
+        Box::pin(async move {
+            let to_delete =
+                guild_config::find_rooms_to_delete(txn, guild_id.get(), &config).await?;
+            guild_config::apply(txn, guild_id.get(), &config).await?;
+            Ok::<_, BotError>(to_delete)
         })
-        .await?;
+    })
+    .await?;
 
     let affected_count = affected.len();
     if affected_count > 0 {

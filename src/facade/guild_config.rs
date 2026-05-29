@@ -294,8 +294,11 @@ fn validate(raw: GuildConfig) -> Result<ValidatedConfig, ConfigError> {
             questions[qi] = Some(text.clone());
             question_texts.push(text.clone());
             if let Some(opts) = &q.answers {
-                let cleaned: Vec<String> =
-                    opts.iter().map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                let cleaned: Vec<String> = opts
+                    .iter()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
                 if !cleaned.is_empty() {
                     answers[qi] = Some(join_answer_options(&cleaned));
                 }
@@ -406,7 +409,10 @@ fn validate(raw: GuildConfig) -> Result<ValidatedConfig, ConfigError> {
             ));
             continue;
         }
-        if preset_routing_key_text.get(&pname).is_none_or(|v| v.is_none()) {
+        if preset_routing_key_text
+            .get(&pname)
+            .is_none_or(|v| v.is_none())
+        {
             errs.push(format!(
                 "routing_rules[\"{pname}\"]: 対応プリセットに routing_key 質問が無い",
             ));
@@ -416,9 +422,7 @@ fn validate(raw: GuildConfig) -> Result<ValidatedConfig, ConfigError> {
         for (ri, rule) in pr.rules.iter().enumerate() {
             let when = rule.when.trim().to_string();
             if when.is_empty() {
-                errs.push(format!(
-                    "routing_rules[\"{pname}\"].rules[{ri}].when が空",
-                ));
+                errs.push(format!("routing_rules[\"{pname}\"].rules[{ri}].when が空",));
                 continue;
             }
             if let Some(opts) = dropdown_opts
@@ -708,7 +712,10 @@ pub async fn apply<C: ConnectionTrait>(
 
     // 6) Re-insert rooms.
     for r in &config.rooms {
-        let group_id = r.group_name.as_ref().and_then(|n| group_name_to_id.get(n).copied());
+        let group_id = r
+            .group_name
+            .as_ref()
+            .and_then(|n| group_name_to_id.get(n).copied());
         let preset_id = r
             .preset_name
             .as_ref()
@@ -840,7 +847,9 @@ pub async fn dump<C: ConnectionTrait>(db: &C, guild_id: u64) -> BotResult<String
             let Some(text) = qopt.as_ref().map(|s| s.trim()).filter(|s| !s.is_empty()) else {
                 continue;
             };
-            let answers = aopt.as_ref().map(|raw| qp_facade::parse_answer_options(raw));
+            let answers = aopt
+                .as_ref()
+                .map(|raw| qp_facade::parse_answer_options(raw));
             let answers = answers.filter(|v| !v.is_empty());
             let routing_key = p.routing_key_index.map(|n| n as usize) == Some(i);
             questions.push(QuestionSection {
@@ -921,7 +930,9 @@ pub async fn dump<C: ConnectionTrait>(db: &C, guild_id: u64) -> BotResult<String
 
     let config = GuildConfig {
         version: SUPPORTED_VERSION,
-        guild: Some(GuildSection { language: Some(lang) }),
+        guild: Some(GuildSection {
+            language: Some(lang),
+        }),
         channels: Some(channels),
         question_presets: preset_sections,
         room_groups: group_sections,

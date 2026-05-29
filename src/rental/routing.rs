@@ -100,8 +100,7 @@ async fn post_purpose_inner(state: &AppState, req: PostRequest) -> BotResult<()>
             // Per-preset matching only kicks in when we have a preset AND a non-empty
             // routing-key answer.
             if let (Some(pid), Some(value)) = (preset_id, route_value.as_ref())
-                && let Some(rule) =
-                    routing_facade::find_rule(txn, guild_raw, pid, value).await?
+                && let Some(rule) = routing_facade::find_rule(txn, guild_raw, pid, value).await?
             {
                 return Ok::<_, crate::error::BotError>(Some((
                     rule.channel_id,
@@ -144,7 +143,13 @@ async fn post_purpose_inner(state: &AppState, req: PostRequest) -> BotResult<()>
             &answers_by_name,
             &assembled_purpose,
         ),
-        None => default_message(state, &lang, &user_mention, &room_mention, &assembled_purpose),
+        None => default_message(
+            state,
+            &lang,
+            &user_mention,
+            &room_mention,
+            &assembled_purpose,
+        ),
     };
 
     // 5) Post.
@@ -189,22 +194,14 @@ fn render_template(
     template::render(&parsed, &ctx)
 }
 
-fn default_message(
-    state: &AppState,
-    lang: &str,
-    user: &str,
-    room: &str,
-    answers: &str,
-) -> String {
+fn default_message(state: &AppState, lang: &str, user: &str, room: &str, answers: &str) -> String {
     let mut args = FluentArgs::new();
     args.set("user", user.to_string());
     args.set("room", room.to_string());
     args.set("answers", answers.to_string());
-    state.i18n.get_with_args(
-        lang,
-        &MessageKey::BotRentalPostDefaultTemplate,
-        Some(&args),
-    )
+    state
+        .i18n
+        .get_with_args(lang, &MessageKey::BotRentalPostDefaultTemplate, Some(&args))
 }
 
 /// Best-effort force-release used by the YAML applier when an active session sits on a

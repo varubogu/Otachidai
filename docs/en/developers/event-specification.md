@@ -46,10 +46,12 @@ The handler branches on three subtypes using `interaction.kind`.
 | Item | Details |
 |---|---|
 | Trigger | A user sends a slash command |
-| Permission check | For admin command names (`register_*` / `delete_room`), requires `ADMINISTRATOR` or `MANAGE_GUILD` |
+| Permission check | For admin command names (`upload_guild_config` / `download_guild_config` / `list_question_presets` / `list_rooms`), requires `ADMINISTRATOR` or `MANAGE_GUILD` |
 | Language resolution | `language::resolve_language(&state, guild_id, interaction.locale)` |
 | Routing | Calls `commands::admin::*::handle` or `commands::user::*::handle` based on `data.name` |
-| Response | Usually `ChannelMessageWithSource`; only permission denial is ephemeral |
+| Response | All admin commands respond `ephemeral`; user commands usually `ChannelMessageWithSource` (only permission denial is ephemeral) |
+
+On a successful `upload_guild_config`, after the transaction commits the handler collects the active sessions seated on rooms scheduled for deletion via `facade::guild_config::find_rooms_to_delete` and runs `rental::routing::force_release_for_rooms`, which aborts in-memory state and timeout tasks and notifies the affected hosts. The DB-side `rental_sessions` / `scheduled_tasks` rows are removed automatically via the `ON DELETE CASCADE` on `rooms`.
 
 See [command-specification.md](command-specification.md) for command details.
 
@@ -72,6 +74,20 @@ For `rental_start:{session_id}:{room_id}`, the bot verifies that the user matche
 | `purpose_modal:{session_id}:{room_id}` | Extracts `purpose_text`, saves the purpose through `rental::flow::submit_purpose`, stops the timer, and transitions to `Active` |
 
 The response is ephemeral and contains the assignment confirmation message.
+
+After a successful `submit_purpose`, an **auto-post hook** runs:
+
+| Item | Details |
+|---|---|
+| Caller | `events::interaction` calls `rental::routing::post_purpose` after the modal submission completes |
+| Routing-key resolution | Pulls the answer to the question pointed at by the preset's `routing_key_index` |
+| Matching | Looks up `rental_routing_rules` by `(preset_id, match_value)` via `facade::routing::find_rule` |
+| Fallback | When no rule matches (or there is no routing-key question), uses the channel in `guild_channels` with `channel_type=4` (`facade::guild_settings::get_rental_post_fallback`) |
+| Template | Uses the rule's `template` when present, otherwise the i18n `BotRentalPostDefaultTemplate` |
+| Posting | `state.http.create_message(channel).content(rendered)` |
+| Error handling | Failures are logged via `tracing::warn!` and never block the rental flow (best-effort) |
+
+The template is parsed/rendered by `parse()` / `render()` in `src/rental/template.rs` and accepts `{{ user }}`, `{{ room }}`, `{{ when }}`, `{{ preset }}`, `{{ q1 }}` through `{{ q10 }}`, `{{ answer:question text }}`, and `{{ answers }}`. Templates are validated at upload time, so render-time failures should not normally happen — if they do, the literal template text is posted so operators can spot the bad row.
 
 ---
 
