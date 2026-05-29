@@ -64,19 +64,10 @@ help-user = **User Commands**
     `/rent` — Start a rental request
     `/help` — Show this help
 help-admin = **Admin Commands**
-    `/register_report_channel` — Register the channel for timeout notifications
-    `/register_rental_button_channel` — Register the channel where the rental button is posted
-    `/register_room_list_channel` — Register the channel where the room list (status board) is posted
-    `/register_question_preset` — Register or update a question preset for rooms
+    `/upload_guild_config` — Upload the whole-guild YAML configuration (channels / question presets / rooms / routing)
+    `/download_guild_config` — Download the current whole-guild configuration as a YAML file
     `/list_question_presets` — List registered question presets
-    `/delete_question_preset` — Delete a question preset
-    `/register_room` — Register a room (text channel, voice channel, or both)
     `/list_rooms` — List registered rooms
-    `/delete_room` — Delete a registered room
-    `/set_room_preset` — Change a room's question preset
-    `/register_group` — Register a room group (bundles rooms into one status board)
-    `/delete_group` — Delete a room group
-    `/set_room_group` — Change which group a room belongs to
 
 ## Rent button
 rent-button-label = Request Room
@@ -85,3 +76,18 @@ rent-answer-button-label = Answer
 ## Errors
 error-generic = An error occurred. Please try again.
 error-db = A database error occurred. Please contact the bot operator.
+
+## Guild configuration (YAML)
+bot-config-upload-success = Guild configuration updated.
+bot-config-upload-active-sessions-released = Guild configuration updated. { $count } active rental session(s) were force-released.
+bot-config-upload-error-yaml = Failed to parse YAML:
+    { $detail }
+bot-config-upload-error-validation = Guild configuration has errors:
+    { $detail }
+bot-config-upload-error-attachment = Could not retrieve the uploaded YAML file. Check the size and content.
+bot-config-download-empty = No guild configuration is currently registered.
+
+## Auto-post for rental purpose
+bot-rental-post-default-template = { $user } started using { $room }
+    { $answers }
+bot-rental-force-released = Your rental was force-released because the guild configuration was reloaded. Please request again with `/rent`.

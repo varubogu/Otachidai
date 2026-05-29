@@ -1,13 +1,4 @@
-pub mod delete_group;
-pub mod delete_question_preset;
-pub mod delete_room;
+pub mod download_guild_config;
 pub mod list_question_presets;
 pub mod list_rooms;
-pub mod register_group;
-pub mod register_question_preset;
-pub mod register_rental_button_channel;
-pub mod register_report_channel;
-pub mod register_room;
-pub mod register_room_list_channel;
-pub mod set_room_group;
-pub mod set_room_preset;
+pub mod upload_guild_config;

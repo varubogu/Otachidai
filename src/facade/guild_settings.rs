@@ -1,5 +1,6 @@
 use crate::entities::guild_channels::{
-    self, CHANNEL_TYPE_RENTAL_BUTTON, CHANNEL_TYPE_REPORT, CHANNEL_TYPE_ROOM_LIST,
+    self, CHANNEL_TYPE_RENTAL_BUTTON, CHANNEL_TYPE_RENTAL_POST_FALLBACK, CHANNEL_TYPE_REPORT,
+    CHANNEL_TYPE_ROOM_LIST,
 };
 use crate::entities::guilds;
 use crate::error::{BotError, BotResult};
@@ -97,6 +98,18 @@ pub async fn get_room_list_channel_row<C: ConnectionTrait>(
         .one(db)
         .await
         .map_err(BotError::from)
+}
+
+pub async fn get_rental_post_fallback<C: ConnectionTrait>(
+    db: &C,
+    guild_id: u64,
+) -> BotResult<Option<(i64, Option<String>)>> {
+    let row = guild_channels::Entity::find()
+        .filter(guild_channels::Column::GuildId.eq(guild_id as i64))
+        .filter(guild_channels::Column::ChannelType.eq(CHANNEL_TYPE_RENTAL_POST_FALLBACK))
+        .one(db)
+        .await?;
+    Ok(row.map(|r| (r.channel_id, r.template)))
 }
 
 pub async fn set_room_list_message_id<C: ConnectionTrait>(

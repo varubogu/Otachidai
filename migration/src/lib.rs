@@ -14,6 +14,7 @@ mod m20260505_000001_add_rental_question_presets;
 mod m20260516_000001_add_question_answers;
 mod m20260519_000001_add_guild_channel_message_id;
 mod m20260519_000002_add_room_groups;
+mod m20260527_000001_add_rental_routing;
 
 pub struct Migrator;
 
@@ -35,6 +36,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20260516_000001_add_question_answers::Migration),
             Box::new(m20260519_000001_add_guild_channel_message_id::Migration),
             Box::new(m20260519_000002_add_room_groups::Migration),
+            Box::new(m20260527_000001_add_rental_routing::Migration),
         ]
     }
 }

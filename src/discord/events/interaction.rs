@@ -1,5 +1,4 @@
 use crate::app_state::AppState;
-use crate::db::rls::with_guild_context;
 use crate::error::BotResult;
 use crate::facade::question_preset::{self, QuestionInput};
 use crate::i18n::MessageKey;
@@ -9,10 +8,9 @@ use crate::rental::{flow as rental_flow, handoff, state_machine::RentalState};
 use std::collections::HashMap;
 use std::sync::Arc;
 use twilight_model::{
-    application::command::{CommandOptionChoice, CommandOptionChoiceValue},
+    application::command::CommandOptionChoice,
     application::interaction::{
-        Interaction, InteractionData, InteractionType, application_command::CommandOptionValue,
-        modal::ModalInteractionComponent,
+        Interaction, InteractionData, InteractionType, modal::ModalInteractionComponent,
     },
     channel::message::MessageFlags,
     gateway::payload::incoming::InteractionCreate,
@@ -53,19 +51,10 @@ async fn handle_command(
 
     let is_admin_command = matches!(
         data.name.as_str(),
-        "register_report_channel"
-            | "register_rental_button_channel"
-            | "register_room_list_channel"
-            | "register_question_preset"
+        "upload_guild_config"
+            | "download_guild_config"
             | "list_question_presets"
-            | "delete_question_preset"
-            | "register_room"
             | "list_rooms"
-            | "delete_room"
-            | "register_group"
-            | "delete_group"
-            | "set_room_group"
-            | "set_room_preset"
     );
 
     if is_admin_command && !check_admin_permission(&interaction) {
@@ -78,8 +67,8 @@ async fn handle_command(
     let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
 
     let response: InteractionResponse = match data.name.as_str() {
-        "register_report_channel" => {
-            let msg = crate::discord::commands::admin::register_report_channel::handle(
+        "upload_guild_config" => {
+            let msg = crate::discord::commands::admin::upload_guild_config::handle(
                 state.clone(),
                 guild_id,
                 data,
@@ -92,94 +81,34 @@ async fn handle_command(
             });
             ephemeral_response(&msg)
         }
-        "register_rental_button_channel" => {
-            let msg = crate::discord::commands::admin::register_rental_button_channel::handle(
+        "download_guild_config" => {
+            match crate::discord::commands::admin::download_guild_config::handle(
                 state.clone(),
                 guild_id,
-                data,
                 &lang,
             )
             .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
-        }
-        "register_room_list_channel" => {
-            let msg = crate::discord::commands::admin::register_room_list_channel::handle(
-                state.clone(),
-                guild_id,
-                data,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
-        }
-        "register_question_preset" => {
-            let msg = crate::discord::commands::admin::register_question_preset::handle(
-                state.clone(),
-                guild_id,
-                data,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
+            {
+                Ok((msg, Some(attachment))) => InteractionResponse {
+                    kind: InteractionResponseType::ChannelMessageWithSource,
+                    data: Some(InteractionResponseData {
+                        content: if msg.is_empty() { None } else { Some(msg) },
+                        attachments: Some(vec![attachment]),
+                        flags: Some(twilight_model::channel::message::MessageFlags::EPHEMERAL),
+                        ..Default::default()
+                    }),
+                },
+                Ok((msg, None)) => ephemeral_response(&msg),
+                Err(e) => {
+                    tracing::error!("{e}");
+                    ephemeral_response("Error")
+                }
+            }
         }
         "list_question_presets" => {
             let msg = crate::discord::commands::admin::list_question_presets::handle(
                 state.clone(),
                 guild_id,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
-        }
-        "delete_question_preset" => {
-            let msg = crate::discord::commands::admin::delete_question_preset::handle(
-                state.clone(),
-                guild_id,
-                data,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
-        }
-        "register_room" => {
-            let msg = crate::discord::commands::admin::register_room::handle(
-                state.clone(),
-                guild_id,
-                data,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
-        }
-        "delete_room" => {
-            let msg = crate::discord::commands::admin::delete_room::handle(
-                state.clone(),
-                guild_id,
-                data,
                 &lang,
             )
             .await
@@ -197,62 +126,6 @@ async fn handle_command(
                         tracing::error!("{e}");
                         "Error".to_string()
                     });
-            ephemeral_response(&msg)
-        }
-        "register_group" => {
-            let msg = crate::discord::commands::admin::register_group::handle(
-                state.clone(),
-                guild_id,
-                data,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
-        }
-        "delete_group" => {
-            let msg = crate::discord::commands::admin::delete_group::handle(
-                state.clone(),
-                guild_id,
-                data,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
-        }
-        "set_room_group" => {
-            let msg = crate::discord::commands::admin::set_room_group::handle(
-                state.clone(),
-                guild_id,
-                data,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
-            ephemeral_response(&msg)
-        }
-        "set_room_preset" => {
-            let msg = crate::discord::commands::admin::set_room_preset::handle(
-                state.clone(),
-                guild_id,
-                data,
-                &lang,
-            )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
             ephemeral_response(&msg)
         }
         "rent" => {
@@ -295,20 +168,11 @@ async fn handle_autocomplete(
         return Ok(());
     };
 
-    // Locate the option the user is currently typing into.
-    let focused = data.options.iter().find_map(|o| match &o.value {
-        CommandOptionValue::Focused(value, _) => Some((o.name.as_str(), value.as_str())),
-        _ => None,
-    });
-
-    let choices = match (data.name.as_str(), focused) {
-        ("register_room", Some(("question_preset", current)))
-        | ("set_room_preset", Some(("question_preset", current)))
-        | ("delete_question_preset", Some(("name", current))) => {
-            question_preset_choices(&state, guild_id, current).await
-        }
-        _ => Vec::new(),
-    };
+    // Autocomplete used to drive `/register_room`, `/set_room_preset`, etc. — all gone
+    // now that admin config lives in the YAML upload flow. Nothing currently uses
+    // autocomplete, but we still need to respond to satisfy Discord.
+    let _ = (data, &state, guild_id);
+    let choices: Vec<CommandOptionChoice> = Vec::new();
 
     let response = InteractionResponse {
         kind: InteractionResponseType::ApplicationCommandAutocompleteResult,
@@ -324,48 +188,6 @@ async fn handle_autocomplete(
         .create_response(interaction.id, &interaction.token, &response)
         .await?;
     Ok(())
-}
-
-/// Build `"id:name"` suggestions for the guild's question presets, filtered by what the
-/// user has typed so far. Discord caps autocomplete at 25 choices and 100-char names.
-async fn question_preset_choices(
-    state: &AppState,
-    guild_id: Id<GuildMarker>,
-    current: &str,
-) -> Vec<CommandOptionChoice> {
-    let presets = with_guild_context(&state.db.guild, guild_id.get(), |txn| {
-        Box::pin(async move { question_preset::list_by_guild(txn, guild_id.get()).await })
-    })
-    .await
-    .unwrap_or_else(|e| {
-        tracing::error!("{e}");
-        Vec::new()
-    });
-
-    let needle = current.trim().to_lowercase();
-    presets
-        .into_iter()
-        .filter(|preset| {
-            needle.is_empty()
-                || question_preset::format_ref_label(preset)
-                    .to_lowercase()
-                    .contains(&needle)
-        })
-        .take(25)
-        .map(|preset| {
-            // Discord caps the choice name/value at 100 characters; truncate on a char
-            // boundary so multi-byte (e.g. Japanese) names don't panic.
-            let label: String = question_preset::format_ref_label(&preset)
-                .chars()
-                .take(100)
-                .collect();
-            CommandOptionChoice {
-                name: label.clone(),
-                name_localizations: None,
-                value: CommandOptionChoiceValue::String(label),
-            }
-        })
-        .collect()
 }
 
 async fn handle_component(
@@ -560,21 +382,48 @@ async fn handle_modal(
                 &answer_prefix,
             );
 
-            let msg = rental_flow::submit_purpose(
+            let submit_result = rental_flow::submit_purpose(
                 state.clone(),
                 guild_id,
                 user_id,
                 session_id,
-                purpose,
+                purpose.clone(),
                 vc_id,
                 &lang,
                 selected_room_id,
             )
-            .await
-            .unwrap_or_else(|e| {
-                tracing::error!("{e}");
-                "Error".to_string()
-            });
+            .await;
+
+            let (msg, posted) = match submit_result {
+                Ok(msg) => (msg, true),
+                Err(e) => {
+                    tracing::error!("{e}");
+                    ("Error".to_string(), false)
+                }
+            };
+
+            // If the rental committed, route the answers to the configured channel.
+            // Failures here are logged and swallowed by `routing::post_purpose`.
+            if posted {
+                let (answers_by_index, answers_by_name) = build_answer_lookups(
+                    &questions_with_inputs,
+                    &dropdown_answers,
+                    &text_answers,
+                );
+                crate::rental::routing::post_purpose(
+                    &state,
+                    crate::rental::routing::PostRequest {
+                        guild_id,
+                        user_id,
+                        session_id,
+                        assembled_purpose: purpose,
+                        answers_by_name,
+                        answers_by_index,
+                        lang: lang.clone(),
+                    },
+                )
+                .await;
+            }
 
             state
                 .http
@@ -595,6 +444,33 @@ async fn handle_modal(
         }
     }
     Ok(())
+}
+
+/// Build the `(answers_by_index, answers_by_name)` lookups consumed by the auto-post
+/// template renderer. `answers_by_index` is sized to the highest-numbered question that
+/// appeared in the preset, so `{{q1}}..{{qN}}` resolves correctly.
+fn build_answer_lookups(
+    questions: &[question_preset::QuestionWithInput],
+    dropdown_answers: &[Option<String>],
+    text_answers: &HashMap<usize, String>,
+) -> (Vec<String>, HashMap<String, String>) {
+    let max_index = questions.iter().map(|q| q.index).max().map(|n| n + 1).unwrap_or(0);
+    let mut by_index: Vec<String> = vec![String::new(); max_index];
+    let mut by_name: HashMap<String, String> = HashMap::new();
+    for q in questions {
+        let value = match q.input {
+            QuestionInput::Dropdown(_) => dropdown_answers
+                .get(q.index)
+                .and_then(|a| a.clone())
+                .unwrap_or_default(),
+            QuestionInput::Text => text_answers.get(&q.index).cloned().unwrap_or_default(),
+        };
+        if let Some(slot) = by_index.get_mut(q.index) {
+            *slot = value.clone();
+        }
+        by_name.insert(q.text.clone(), value);
+    }
+    (by_index, by_name)
 }
 
 /// True when `session_id` has an in-memory `AwaitingPurpose` entry hosted by `user_id`.

@@ -2,88 +2,59 @@
 
 Commands that require administrator permissions. For user-facing commands, see [Server Users: Command Reference](../server-users/command-reference.md).
 
+Guild configuration (channels, question presets, rooms, routing) is managed via a single YAML file. The individual `register_*` / `delete_*` / `set_*` commands have been retired — all additions, changes, and deletions go through `/upload_guild_config`.
+
 ---
 
-## `/register_report_channel`
+## `/upload_guild_config`
 
-Registers the report notification channel.
+Uploads the whole-guild configuration as a YAML file. **The uploaded YAML completely replaces the existing configuration.**
 
 | Item | Details |
 |---|---|
 | Permission | Server Administrator |
-| Argument | Text channel ID (required) |
+| Argument | `file` … YAML attachment (required) |
 
-**Description**
+**Key behaviour**
 
-Sets the channel that receives notifications when a user joins a VC but fails to submit a rental purpose within 10 minutes.  
-If using a private channel, grant the bot View Channel and Send Messages permissions for it.
+- The YAML is parsed → validated → written to the DB in that order. If any step errors, the DB is left untouched.
+- Any room, group, preset, routing rule, or channel that does not appear in the uploaded YAML is deleted.
+- If a room being deleted has an active rental session, **that session is force-released and its host is notified**.
+- If no routing rule matches and no fallback channel is configured, nothing is posted (a warning is logged).
 
-```
-/register_report_channel 123456789012345678
-```
+For the YAML schema, see [Guild configuration YAML spec](guild-config-yaml.md).
 
 ---
 
-## `/register_rental_button_channel`
+## `/download_guild_config`
 
-Registers the channel where the rental button is posted.
+Downloads the current whole-guild configuration as a YAML file. The response is an ephemeral attachment visible only to you.
 
 | Item | Details |
 |---|---|
 | Permission | Server Administrator |
-| Argument | Text channel ID (required) |
+| Argument | None |
 
-**Description**
-
-After registration, the bot automatically posts a rental request button in the specified channel. Users can click it to begin the rental flow.
-
-```
-/register_rental_button_channel 123456789012345678
-```
+To edit your configuration, fetch the current state with this command, edit it locally, then re-upload with `/upload_guild_config`.
 
 ---
 
-## `/register_room`
+## `/list_question_presets`
 
-Registers a room available for rental.
+Lists the registered question presets (lightweight state check).
 
 | Item | Details |
 |---|---|
 | Permission | Server Administrator |
-| Arguments | Text channel ID (optional), Voice channel ID (optional) — at least one required |
-
-**Description**
-
-A room can be a text channel alone, a voice channel alone, or a text+VC pair.  
-When both IDs are provided, the requester is granted access to both channels together.
-For VC-only rooms, prompts are posted to the VC's built-in text chat. For text+VC pairs, prompts are posted to the specified text channel.
-
-```
-# Text + VC pair
-/register_room 123456789012345678 987654321098765432
-
-# VC only
-/register_room 987654321098765432
-
-# Text only
-/register_room 123456789012345678
-```
+| Argument | None |
 
 ---
 
-## `/delete_room`
+## `/list_rooms`
 
-Removes a registered room.
+Lists the registered rooms (lightweight state check).
 
 | Item | Details |
 |---|---|
 | Permission | Server Administrator |
-| Arguments | Text channel ID (optional), Voice channel ID (optional) — at least one required |
-
-**Description**
-
-For rooms registered as a text+VC pair, specifying either channel ID will delete the entire pair.
-
-```
-/delete_room 987654321098765432
-```
+| Argument | None |

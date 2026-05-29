@@ -58,6 +58,14 @@ pub enum MessageKey {
     RentAnswerButtonLabel,
     ErrorGeneric,
     ErrorDb,
+    BotRentalPostDefaultTemplate,
+    BotRentalForceReleased,
+    BotConfigUploadSuccess,
+    BotConfigUploadActiveSessionsReleased,
+    BotConfigUploadErrorYaml,
+    BotConfigUploadErrorValidation,
+    BotConfigUploadErrorAttachment,
+    BotConfigDownloadEmpty,
 }
 
 impl MessageKey {
@@ -122,6 +130,16 @@ impl MessageKey {
             Self::RentAnswerButtonLabel => "rent-answer-button-label",
             Self::ErrorGeneric => "error-generic",
             Self::ErrorDb => "error-db",
+            Self::BotRentalPostDefaultTemplate => "bot-rental-post-default-template",
+            Self::BotRentalForceReleased => "bot-rental-force-released",
+            Self::BotConfigUploadSuccess => "bot-config-upload-success",
+            Self::BotConfigUploadActiveSessionsReleased => {
+                "bot-config-upload-active-sessions-released"
+            }
+            Self::BotConfigUploadErrorYaml => "bot-config-upload-error-yaml",
+            Self::BotConfigUploadErrorValidation => "bot-config-upload-error-validation",
+            Self::BotConfigUploadErrorAttachment => "bot-config-upload-error-attachment",
+            Self::BotConfigDownloadEmpty => "bot-config-download-empty",
         }
     }
 }

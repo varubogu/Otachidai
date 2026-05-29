@@ -10,6 +10,7 @@ pub struct Model {
     pub channel_id: i64,
     pub channel_type: i16,
     pub message_id: Option<i64>,
+    pub template: Option<String>,
     pub created_at: DateTimeWithTimeZone,
 }
 
@@ -34,3 +35,4 @@ impl ActiveModelBehavior for ActiveModel {}
 pub const CHANNEL_TYPE_REPORT: i16 = 1;
 pub const CHANNEL_TYPE_RENTAL_BUTTON: i16 = 2;
 pub const CHANNEL_TYPE_ROOM_LIST: i16 = 3;
+pub const CHANNEL_TYPE_RENTAL_POST_FALLBACK: i16 = 4;

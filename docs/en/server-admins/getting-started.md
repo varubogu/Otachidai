@@ -7,62 +7,85 @@ Initial setup steps to enable otachidai Bot in your Discord server.
 - otachidai Bot has been invited to your server
 - You are logged in with a server administrator account
 
-## Setup Order
+## Overview
 
-Follow these steps in order.
+All guild configuration (report channel, rental button channel, room list, question presets, rooms, groups, routing rules) is managed by a **single YAML file**. All additions, changes, and deletions go through `/upload_guild_config`.
 
-### 1. Register a Report Channel
+## First-time setup
 
-Register the channel where the bot will send notifications when a user joins a VC but does not submit a rental purpose within 10 minutes.
+### 1. Fetch the template YAML
 
-```
-/register_report_channel <text_channel_id>
-```
-
-- A private channel visible only to staff is recommended
-- If using a private channel, grant the bot **View Channel** and **Send Messages** permissions for that channel
-
-### 2. Register a Rental Button Channel
-
-Register the channel where the bot will post the rental request button.
+Even before any setup, you can download an (initially empty) template:
 
 ```
-/register_rental_button_channel <text_channel_id>
+/download_guild_config
 ```
 
-After registration, the bot automatically posts a rental button in the specified channel.
+The bot returns `guild_config.yml` as an ephemeral attachment.
 
-### 3. Register Rooms
+### 2. Edit the YAML
 
-Register rooms available for rental. A room can be a text channel, a voice channel, or a text+VC pair.
+Open the file in your editor and fill in your configuration:
+
+```yaml
+version: 1
+
+guild:
+  language: en
+
+channels:
+  report: "111111111111111111"            # timeout notifications
+  rental_button: "222222222222222222"     # channel hosting the rental button
+  room_list: "333333333333333333"         # status board channel
+  rental_post_fallback:                   # used when no routing rule matches
+    channel: "444444444444444444"
+
+question_presets:
+  - name: "Standard"
+    questions:
+      - text: "Purpose?"
+        answers: ["Chat", "Work", "Event"]
+        routing_key: true                  # answer drives routing
+
+rooms:
+  - voice_channel_id: "555555555555555555"
+    text_channel_id: "666666666666666666"
+    question_preset: "Standard"
+
+routing_rules:
+  - preset: "Standard"
+    rules:
+      - when: "Chat"
+        channel: "777777777777777777"
+      - when: "Work"
+        channel: "888888888888888888"
+```
+
+For full schema details, see [Guild configuration YAML spec](guild-config-yaml.md).
+
+### 3. Upload the YAML
 
 ```
-/register_room [text_channel_id] [voice_channel_id]
+/upload_guild_config file:<attachment>
 ```
 
-- Either argument alone is valid (e.g., VC-only room)
-- For VC-only rooms, prompts are posted to the VC's built-in text chat
-- Providing both creates a paired text+VC room, and prompts are posted to the specified text channel
-- Repeat the command to register multiple rooms
+- If validation fails, the DB is left untouched and an ephemeral error reply explains why.
+- On success, settings are applied immediately — the status board, post targets, and so on switch over.
 
-### Examples
+### 4. Verify
 
-```
-# Text + VC pair
-/register_room 123456789012345678 987654321098765432
+Use `/list_rooms` and `/list_question_presets` to confirm what's now registered.
 
-# VC only
-/register_room 987654321098765432
+## Changing settings later
 
-# Text only
-/register_room 123456789012345678
-```
+1. `/download_guild_config` to fetch current state
+2. Edit locally
+3. `/upload_guild_config` to apply the changes
 
-## Verify Setup
-
-Use `/help` to review current configuration and see the admin help guide.
+**Important**: Upload performs a full replacement. Entities not present in the uploaded YAML are deleted. If a room being deleted has an active rental session, that session is force-released.
 
 ## Related Documentation
 
 - [Command Reference](command-reference.md) — detailed description of each command
+- [Guild configuration YAML spec](guild-config-yaml.md) — YAML format and validation rules
 - [Troubleshooting](troubleshooting.md) — common issues and solutions

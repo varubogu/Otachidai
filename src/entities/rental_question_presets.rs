@@ -27,6 +27,7 @@ pub struct Model {
     pub answer_8: Option<String>,
     pub answer_9: Option<String>,
     pub answer_10: Option<String>,
+    pub routing_key_index: Option<i16>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
 }

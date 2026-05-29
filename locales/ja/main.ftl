@@ -64,19 +64,10 @@ help-user = **ユーザーコマンド**
     `/rent` — レンタルリクエストを開始する
     `/help` — このヘルプを表示する
 help-admin = **管理者コマンド**
-    `/register_report_channel` — タイムアウト通知チャンネルを登録する
-    `/register_rental_button_channel` — レンタルボタンを投稿するチャンネルを登録する
-    `/register_room_list_channel` — 部屋一覧（ステータスボード）を投稿するチャンネルを登録する
-    `/register_question_preset` — 部屋ごとの質問プリセットを登録・変更する
+    `/upload_guild_config` — ギルド設定 (チャンネル / 質問プリセット / 部屋 / ルーティング) を YAML で一括アップロード
+    `/download_guild_config` — 現在のギルド設定を YAML としてダウンロード
     `/list_question_presets` — 登録済みの質問プリセットを一覧表示する
-    `/delete_question_preset` — 質問プリセットを削除する
-    `/register_room` — 部屋を登録する（テキストチャンネル、ボイスチャンネル、またはその両方）
     `/list_rooms` — 登録済み部屋を一覧表示する
-    `/delete_room` — 登録済み部屋を削除する
-    `/set_room_preset` — 部屋の質問プリセットを変更する
-    `/register_group` — 部屋グループを登録する（複数の部屋を1つのステータスボードにまとめる）
-    `/delete_group` — 部屋グループを削除する
-    `/set_room_group` — 部屋の所属グループを変更する
 
 ## レンタルボタン
 rent-button-label = 部屋をリクエスト
@@ -85,3 +76,18 @@ rent-answer-button-label = 回答する
 ## エラー
 error-generic = エラーが発生しました。もう一度お試しください。
 error-db = データベースエラーが発生しました。ボット運営者にお問い合わせください。
+
+## ギルド設定 (YAML)
+bot-config-upload-success = ギルド設定を更新しました。
+bot-config-upload-active-sessions-released = ギルド設定を更新しました。利用中だった { $count } 件のレンタルセッションは強制的に終了しました。
+bot-config-upload-error-yaml = YAML の解析に失敗しました:
+    { $detail }
+bot-config-upload-error-validation = ギルド設定にエラーがあります:
+    { $detail }
+bot-config-upload-error-attachment = YAML ファイルを取得できませんでした。ファイルサイズや拡張子を確認してください。
+bot-config-download-empty = 現在登録されているギルド設定はありません。
+
+## 利用目的の自動投稿
+bot-rental-post-default-template = { $user } さんが { $room } の利用を開始しました
+    { $answers }
+bot-rental-force-released = ギルド設定の更新により、現在のレンタルは強制的に終了しました。再度 `/rent` でリクエストしてください。
