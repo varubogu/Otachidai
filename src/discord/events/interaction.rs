@@ -223,33 +223,47 @@ async fn handle_component(
                 (parts[0].parse::<i32>(), parts[1].parse::<i32>())
         {
             let lang = get_lang(&state, guild_id, interaction.locale.as_deref()).await;
-            let response = if is_pending_rental_host(&state, session_id, user_id.get()) {
-                let include_vc_question =
-                    !rental_flow::user_is_in_room(&state, guild_id, user_id, room_id)
-                        .await
-                        .unwrap_or(false);
-                rental_flow::build_unified_modal_for_room(
-                    &state,
-                    guild_id,
-                    &lang,
-                    session_id,
-                    room_id,
-                    include_vc_question,
-                )
-                .await
-                .unwrap_or_else(|e| {
-                    tracing::error!("{e}");
-                    simple_response("Error")
-                })
-            } else {
-                let msg = state.i18n.get(&lang, &MessageKey::ErrorGeneric);
-                InteractionResponse {
-                    kind: InteractionResponseType::ChannelMessageWithSource,
-                    data: Some(InteractionResponseData {
-                        content: Some(msg),
-                        flags: Some(MessageFlags::EPHEMERAL),
-                        ..Default::default()
-                    }),
+            let response = match pending_rental_access(&state, session_id, user_id.get()) {
+                PendingRentalAccess::Host => {
+                    let include_vc_question =
+                        !rental_flow::user_is_in_room(&state, guild_id, user_id, room_id)
+                            .await
+                            .unwrap_or(false);
+                    rental_flow::build_unified_modal_for_room(
+                        &state,
+                        guild_id,
+                        &lang,
+                        session_id,
+                        room_id,
+                        include_vc_question,
+                    )
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::error!("{e}");
+                        simple_response("Error")
+                    })
+                }
+                PendingRentalAccess::OtherUser => {
+                    let msg = state.i18n.get(&lang, &MessageKey::BotRentalPendingByOther);
+                    InteractionResponse {
+                        kind: InteractionResponseType::ChannelMessageWithSource,
+                        data: Some(InteractionResponseData {
+                            content: Some(msg),
+                            flags: Some(MessageFlags::EPHEMERAL),
+                            ..Default::default()
+                        }),
+                    }
+                }
+                PendingRentalAccess::NotPending => {
+                    let msg = state.i18n.get(&lang, &MessageKey::ErrorGeneric);
+                    InteractionResponse {
+                        kind: InteractionResponseType::ChannelMessageWithSource,
+                        data: Some(InteractionResponseData {
+                            content: Some(msg),
+                            flags: Some(MessageFlags::EPHEMERAL),
+                            ..Default::default()
+                        }),
+                    }
                 }
             };
 
@@ -472,19 +486,30 @@ fn build_answer_lookups(
     (by_index, by_name)
 }
 
-/// True when `session_id` has an in-memory `AwaitingPurpose` entry hosted by `user_id`.
-/// Guards the answer modal so only the rental host can fill it in.
-fn is_pending_rental_host(state: &AppState, session_id: i32, user_id: u64) -> bool {
-    state.rental_states.iter().any(|entry| {
-        matches!(
-            &entry.state,
+enum PendingRentalAccess {
+    Host,
+    OtherUser,
+    NotPending,
+}
+
+/// Classifies who may open the answer modal for an in-memory AwaitingPurpose entry.
+fn pending_rental_access(state: &AppState, session_id: i32, user_id: u64) -> PendingRentalAccess {
+    state
+        .rental_states
+        .iter()
+        .find_map(|entry| match &entry.state {
             RentalState::AwaitingPurpose {
                 session_id: pending_session_id,
                 host_user_id,
                 ..
-            } if *pending_session_id == session_id && *host_user_id == user_id
-        )
-    })
+            } if *pending_session_id == session_id => Some(if *host_user_id == user_id {
+                PendingRentalAccess::Host
+            } else {
+                PendingRentalAccess::OtherUser
+            }),
+            _ => None,
+        })
+        .unwrap_or(PendingRentalAccess::NotPending)
 }
 
 /// Recursively collect each input's submitted value from a modal component tree, keyed by

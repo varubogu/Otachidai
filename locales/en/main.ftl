@@ -9,6 +9,7 @@ bot-rental-no-rooms = No rooms are currently available. Please try again later.
 bot-rental-already-renting = You already have an active rental.
 bot-rental-room-occupied = That room is currently occupied.
 bot-rental-expired = Your rental request has expired. Please start a new request.
+bot-rental-pending-by-other = Someone else is currently requesting this room.
 bot-rental-vc-question = Select the voice channel to rent
 bot-rental-vc-room-occupied = The selected room is already in use. Please pick another one.
 bot-rental-vc-no-rooms = No voice channels are available to choose.

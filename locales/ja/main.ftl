@@ -9,6 +9,7 @@ bot-rental-no-rooms = 現在利用可能な部屋がありません。しばら�
 bot-rental-already-renting = すでにアクティブなレンタルがあります。
 bot-rental-room-occupied = その部屋は現在使用中です。
 bot-rental-expired = レンタル申請の有効期限が切れました。もう一度申請してください。
+bot-rental-pending-by-other = この部屋は現在、他のユーザーが申請中です。
 bot-rental-vc-question = 利用するVCを選択してください
 bot-rental-vc-room-occupied = 選択した部屋は他のレンタルで使用中です。別の部屋を選択してください。
 bot-rental-vc-no-rooms = 選択可能なVCがありません。
