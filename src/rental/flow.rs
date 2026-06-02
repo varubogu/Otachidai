@@ -8,7 +8,7 @@ use crate::facade::{
 };
 use crate::i18n::MessageKey;
 use crate::language::resolve_language;
-use crate::rental::state_machine::{RentalState, RentalStateEntry};
+use crate::rental::state_machine::{RentalPromptMessage, RentalState, RentalStateEntry};
 use crate::rental::timeout::spawn_purpose_timeout;
 use fluent_bundle::FluentArgs;
 use sea_orm::EntityTrait;
@@ -17,7 +17,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use twilight_model::id::{
     Id,
-    marker::{ChannelMarker, GuildMarker, UserMarker},
+    marker::{ChannelMarker, GuildMarker, MessageMarker, UserMarker},
 };
 use twilight_model::{
     channel::message::component::{
@@ -530,6 +530,7 @@ pub async fn start_rental(
                 session_id: session.id,
                 host_user_id: user_id.get(),
                 timeout_task: timeout,
+                prompt_message: None,
             },
             room_id,
         },
@@ -736,6 +737,8 @@ pub async fn submit_purpose(
     })
     .await?;
 
+    delete_purpose_prompt_message(&state, guild_id.get(), key.1, session_id).await;
+
     if let Some(mut entry) = state.rental_states.get_mut(&key) {
         entry.state = RentalState::Active {
             session_id,
@@ -762,6 +765,66 @@ pub fn assemble_purpose_from_parts(
         text_answers,
         answer_prefix,
     )
+}
+
+pub fn attach_purpose_prompt_message(
+    state: &AppState,
+    guild_id: Id<GuildMarker>,
+    voice_channel_id: Id<ChannelMarker>,
+    session_id: i32,
+    prompt_message: RentalPromptMessage,
+) {
+    let key = (guild_id.get(), voice_channel_id.get());
+    if let Some(mut entry) = state.rental_states.get_mut(&key)
+        && let RentalState::AwaitingPurpose {
+            session_id: pending_session_id,
+            prompt_message: stored_message,
+            ..
+        } = &mut entry.state
+        && *pending_session_id == session_id
+    {
+        *stored_message = Some(prompt_message);
+    }
+}
+
+pub(crate) async fn delete_purpose_prompt_message(
+    state: &AppState,
+    guild_id: u64,
+    voice_channel_id: u64,
+    session_id: i32,
+) {
+    let prompt_message = state
+        .rental_states
+        .get(&(guild_id, voice_channel_id))
+        .and_then(|entry| match &entry.state {
+            RentalState::AwaitingPurpose {
+                session_id: pending_session_id,
+                prompt_message,
+                ..
+            } if *pending_session_id == session_id => *prompt_message,
+            _ => None,
+        });
+
+    if let Some(prompt_message) = prompt_message {
+        let result = state
+            .http
+            .delete_message(
+                Id::<ChannelMarker>::new(prompt_message.channel_id),
+                Id::<MessageMarker>::new(prompt_message.message_id),
+            )
+            .await;
+        if let Err(err) = result {
+            tracing::warn!(
+                guild_id,
+                voice_channel_id,
+                session_id,
+                channel_id = prompt_message.channel_id,
+                message_id = prompt_message.message_id,
+                error = %err,
+                "Failed to delete rental purpose prompt message"
+            );
+        }
+    }
 }
 
 pub async fn release_rental(
@@ -794,6 +857,8 @@ pub async fn release_rental(
     // restart (`restore_pending_timeouts`). Without this, a cancelled rental's DB-side
     // task would re-spawn on the next boot and may race with a newer rental.
     rental_facade::mark_session_tasks_processed(&state.db.system, session_id).await?;
+
+    delete_purpose_prompt_message(&state, guild_id.get(), voice_channel_id, session_id).await;
 
     state.rental_states.remove(&key);
 

@@ -5,7 +5,7 @@ use crate::facade::room as room_facade;
 use crate::language::resolve_language;
 use crate::rental::{
     flow as rental_flow, handoff,
-    state_machine::{RentalState, state_key},
+    state_machine::{RentalPromptMessage, RentalState, state_key},
 };
 use std::sync::Arc;
 use twilight_model::channel::message::AllowedMentions;
@@ -155,7 +155,7 @@ async fn handle_join(
 
         let notification_channel_id = prompt_channel_id(room.text_channel_id, channel_id);
 
-        if let Err(err) = state
+        match state
             .http
             .create_message(notification_channel_id)
             .content(&content)
@@ -163,8 +163,26 @@ async fn handle_join(
             .components(&components)
             .await
         {
-            tracing::warn!(%guild_id, %user_id, %channel_id, %notification_channel_id, error = %err, "Failed to post rental question prompt");
-            rental_flow::release_rental(state, guild_id, user_id, channel_id.get()).await?;
+            Ok(response) => match response.model().await {
+                Ok(message) => rental_flow::attach_purpose_prompt_message(
+                    &state,
+                    guild_id,
+                    channel_id,
+                    session_id,
+                    RentalPromptMessage {
+                        channel_id: notification_channel_id.get(),
+                        message_id: message.id.get(),
+                    },
+                ),
+                Err(err) => {
+                    tracing::warn!(%guild_id, %user_id, %channel_id, %notification_channel_id, error = %err, "Failed to read rental question prompt message");
+                    rental_flow::release_rental(state, guild_id, user_id, channel_id.get()).await?;
+                }
+            },
+            Err(err) => {
+                tracing::warn!(%guild_id, %user_id, %channel_id, %notification_channel_id, error = %err, "Failed to post rental question prompt");
+                rental_flow::release_rental(state, guild_id, user_id, channel_id.get()).await?;
+            }
         }
     }
 

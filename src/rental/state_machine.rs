@@ -12,6 +12,7 @@ pub enum RentalState {
         session_id: i32,
         host_user_id: u64,
         timeout_task: JoinHandle<()>,
+        prompt_message: Option<RentalPromptMessage>,
     },
     Active {
         session_id: i32,
@@ -27,6 +28,12 @@ pub enum RentalState {
 pub struct RentalStateEntry {
     pub state: RentalState,
     pub room_id: i32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct RentalPromptMessage {
+    pub channel_id: u64,
+    pub message_id: u64,
 }
 
 /// Key: (guild_id raw value, voice_channel_id raw value)

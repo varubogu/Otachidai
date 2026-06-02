@@ -88,6 +88,14 @@ async fn handle_purpose_timeout(
 
     // Only remove the state entry if it still belongs to this session. A newer rental
     // started after cancellation can sit at the same (guild, vc) key.
+    crate::rental::flow::delete_purpose_prompt_message(
+        state,
+        guild_id,
+        voice_channel_id,
+        session_id,
+    )
+    .await;
+
     state
         .rental_states
         .remove_if(&(guild_id, voice_channel_id), |_, entry| {
