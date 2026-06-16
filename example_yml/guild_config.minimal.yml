@@ -1,0 +1,7 @@
+version: 1
+
+# /upload_guild_config は全置換です。
+# この最小構成をアップロードすると、既存のチャンネル・部屋・質問プリセット・ルーティング設定は削除されます。
+guild:
+  # "ja" or "en"
+  language: ja

@@ -1,0 +1,76 @@
+# /upload_guild_config に添付するギルド設定のサンプルです。
+# Discord のチャンネル ID は、実際のサーバーの ID に置き換えてください。
+version: 1
+
+guild:
+  # "ja" or "en"
+  language: ja
+
+channels:
+  # タイムアウト通知などの投稿先
+  report: "111111111111111111"
+
+  # レンタルボタンを設置するテキストチャンネル
+  rental_button: "222222222222222222"
+
+  # 部屋一覧ボードを投稿するテキストチャンネル
+  room_list: "333333333333333333"
+
+  # ルーティングルールに一致しない場合の自動投稿先
+  rental_post_fallback:
+    channel: "444444444444444444"
+    template: |
+      {{user}} さんが {{room}} の利用を開始しました。
+      {{answers}}
+
+question_presets:
+  - name: "通常募集"
+    questions:
+      - text: "目的は？"
+        answers: ["雑談", "作業", "イベント"]
+        routing_key: true
+      - text: "募集人数"
+        answers: ["1", "2", "3", "4"]
+      - text: "備考"
+
+  - name: "作業部屋"
+    questions:
+      - text: "作業内容"
+      - text: "参加可否"
+        answers: ["参加歓迎", "聞き専歓迎", "募集なし"]
+
+room_groups:
+  - name: "メインフロア"
+    channel_id: "555555555555555555"
+  - name: "作業フロア"
+    channel_id: "666666666666666666"
+
+rooms:
+  - voice_channel_id: "777777777777777777"
+    text_channel_id: "888888888888888888"
+    group: "メインフロア"
+    question_preset: "通常募集"
+
+  - voice_channel_id: "999999999999999999"
+    text_channel_id: "111111111111111110"
+    group: "作業フロア"
+    question_preset: "作業部屋"
+
+routing_rules:
+  - preset: "通常募集"
+    rules:
+      - when: "雑談"
+        channel: "111111111111111112"
+        template: |
+          {{user}} さんが雑談部屋を開きました。
+          部屋: {{room}}
+          人数: {{answer:募集人数}}
+          備考: {{answer:備考}}
+      - when: "作業"
+        channel: "111111111111111113"
+        template: |
+          {{user}} さんが作業部屋を開きました。
+          部屋: {{room}}
+          {{answers}}
+      - when: "イベント"
+        channel: "111111111111111114"
