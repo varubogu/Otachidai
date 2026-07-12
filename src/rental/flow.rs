@@ -866,3 +866,61 @@ pub async fn release_rental(
 
     Ok(state.i18n.get(&lang, &MessageKey::BotRentalReleased))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncate_chars_respects_char_boundary() {
+        assert_eq!(truncate_chars("hello", 3), "hel");
+        // マルチバイト文字でも境界で安全に切る（バイト境界 panic を避ける）。
+        assert_eq!(truncate_chars("あいうえお", 2), "あい");
+        // 上限より短ければそのまま。
+        assert_eq!(truncate_chars("short", 50), "short");
+    }
+
+    #[test]
+    fn modal_question_custom_id_uses_mq_prefix() {
+        assert_eq!(modal_question_custom_id(0), "mq_0");
+        assert_eq!(modal_question_custom_id(3), "mq_3");
+    }
+
+    #[test]
+    fn build_question_label_text_question_becomes_text_input() {
+        let q = QuestionWithInput {
+            index: 0,
+            text: "目的".to_string(),
+            input: QuestionInput::Text,
+        };
+        let Component::Label(label) = build_question_label(&q) else {
+            panic!("Label でラップされること");
+        };
+        // 表示は 1 始まりのインデックス。
+        assert_eq!(label.label, "1. 目的");
+        match *label.component {
+            Component::TextInput(input) => assert_eq!(input.custom_id, "mq_0"),
+            _ => panic!("自由記述は TextInput になる"),
+        }
+    }
+
+    #[test]
+    fn build_question_label_dropdown_becomes_select_menu() {
+        let q = QuestionWithInput {
+            index: 1,
+            text: "種別".to_string(),
+            input: QuestionInput::Dropdown(vec!["A".to_string(), "B".to_string()]),
+        };
+        let Component::Label(label) = build_question_label(&q) else {
+            panic!("Label でラップされること");
+        };
+        assert_eq!(label.label, "2. 種別");
+        match *label.component {
+            Component::SelectMenu(menu) => {
+                assert_eq!(menu.custom_id, "mq_1");
+                assert_eq!(menu.options.expect("options").len(), 2);
+            }
+            _ => panic!("選択肢付きは SelectMenu になる"),
+        }
+    }
+}

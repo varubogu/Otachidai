@@ -99,8 +99,8 @@ jobs:
       - name: Run database migrations
         run: cargo run -j 1 --manifest-path migration/Cargo.toml -- up
 
-      - name: Run ignored facade tests (spreadsheet)
-        run: cargo test -j 1 --test mod integration::facades::spreadsheet_test -- --ignored
-
-      - name: Run ignored facade tests (guild settings)
-        run: cargo test -j 1 --test mod integration::facades::guild_settings_test -- --ignored
+      # 結合テスト（facade CRUD / レンタルライフサイクル / RLS 分離）を一括実行する。
+      # 各テストはトランザクション rollback で分離されるため、単一DBを使い回しても
+      # データが残らない。RUST_TEST_THREADS=1 で直列実行。
+      - name: Run ignored integration tests (DB required)
+        run: cargo test -j 1 --test mod -- --ignored

@@ -74,3 +74,101 @@ pub fn find_vc_for_session(states: &RentalStateMap, session_id: i32) -> u64 {
     }
     0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_handle() -> JoinHandle<()> {
+        tokio::spawn(std::future::pending())
+    }
+
+    #[tokio::test]
+    async fn session_id_extracted_from_each_state() {
+        let awaiting = RentalStateEntry {
+            state: RentalState::AwaitingPurpose {
+                session_id: 11,
+                host_user_id: 1,
+                timeout_task: dummy_handle(),
+                prompt_message: None,
+            },
+            room_id: 1,
+        };
+        let active = RentalStateEntry {
+            state: RentalState::Active {
+                session_id: 22,
+                host_user_id: 1,
+            },
+            room_id: 1,
+        };
+        let handoff = RentalStateEntry {
+            state: RentalState::PendingHandoff {
+                session_id: 33,
+                timeout_task: dummy_handle(),
+            },
+            room_id: 1,
+        };
+        assert_eq!(awaiting.session_id(), 11);
+        assert_eq!(active.session_id(), 22);
+        assert_eq!(handoff.session_id(), 33);
+    }
+
+    #[test]
+    fn state_key_uses_raw_ids() {
+        let guild = Id::<GuildMarker>::new(123);
+        let channel = Id::<ChannelMarker>::new(456);
+        assert_eq!(state_key(guild, channel), (123, 456));
+    }
+
+    #[tokio::test]
+    async fn find_vc_for_session_returns_matching_vc_then_zero() {
+        let map = new_state_map();
+        map.insert(
+            (10, 999),
+            RentalStateEntry {
+                state: RentalState::Active {
+                    session_id: 42,
+                    host_user_id: 1,
+                },
+                room_id: 5,
+            },
+        );
+        assert_eq!(find_vc_for_session(&map, 42), 999);
+        // 見つからない場合は 0 を返す。
+        assert_eq!(find_vc_for_session(&map, 7), 0);
+    }
+
+    #[tokio::test]
+    async fn abort_timeout_cancels_pending_handoff_task() {
+        let entry = RentalStateEntry {
+            state: RentalState::PendingHandoff {
+                session_id: 7,
+                timeout_task: dummy_handle(),
+            },
+            room_id: 1,
+        };
+        entry.abort_timeout();
+        let RentalStateEntry {
+            state: RentalState::PendingHandoff { timeout_task, .. },
+            ..
+        } = entry
+        else {
+            unreachable!()
+        };
+        let err = timeout_task.await.unwrap_err();
+        assert!(err.is_cancelled(), "abort 後のタスクはキャンセル扱いになる");
+    }
+
+    #[tokio::test]
+    async fn abort_timeout_is_noop_for_active() {
+        let entry = RentalStateEntry {
+            state: RentalState::Active {
+                session_id: 9,
+                host_user_id: 1,
+            },
+            room_id: 1,
+        };
+        // Active にはタイムアウトタスクが無いので、呼んでも何も起きない（panic しない）。
+        entry.abort_timeout();
+    }
+}
